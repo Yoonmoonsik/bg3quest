@@ -14,9 +14,9 @@ const I18N = {
     titleOverride: "제목 덮어쓰기", tables: "보상 테이블", optTables: "선택 보상 테이블", tmpl: "보상 템플릿 설명",
     rewardTarget: "보상 대상(QuestRewardTarget)", sort: "정렬 우선순위", guid: "GUID", handle: "제목 핸들",
     priority: "우선순위", techShow: "기술 정보 표시", techHide: "기술 정보 숨기기", help: "도움말", markers: "마커", noMarker: "마커 정보 없음", target: "대상", radius: "반경",
-    "f-st": "진행", done: "완료", hid: "숨김", unmarked: "표시 안 함", markDone: "완료 표시", markHide: "숨기기",
+    "f-st": "진행", done: "완료", hid: "숨김", unmarked: "표시 안 함", markDone: "퀘스트 완료", markHide: "퀘스트 숨기기", stepDone: "단계 완료", stepHide: "단계 숨기기",
     showHid: "숨긴 퀘스트 보기", hideHid: "숨긴 퀘스트 숨기기",
-    clearMark: "표시 초기화", export: "진행 내보내기", resetMarks: "진행 초기화", import: "진행 불러오기", importBad: "진행 파일을 읽을 수 없습니다.",
+    clearMark: "퀘스트 표시 초기화", export: "진행 내보내기", resetMarks: "진행 초기화", import: "진행 불러오기", importBad: "진행 파일을 읽을 수 없습니다.",
     importAsk: (n) => `${n}개 표시를 불러옵니다. 지금 표시는 모두 바뀝니다. 계속할까요?`, resetAsk: (n) => `완료·숨김 표시 ${n}개를 모두 지울까요?`,
     footer: "데이터: 바닐라 게임 파일(Story/Journal의 quest·objective·questcategory 프로토타입과 Markers, Levelmaps의 경험치·골드 표)에서 추출. 막은 목표 마커의 레벨로 분류했습니다.",
   },
@@ -34,9 +34,9 @@ const I18N = {
     titleOverride: "Title override", tables: "Reward tables", optTables: "Optional reward tables", tmpl: "Reward template descriptions",
     rewardTarget: "QuestRewardTarget", sort: "Sorting priority", guid: "GUID", handle: "Title handle",
     priority: "Priority", techShow: "Show technical info", techHide: "Hide technical info", help: "Help", markers: "Markers", noMarker: "No marker data", target: "Target", radius: "Radius",
-    "f-st": "Progress", done: "Completed", hid: "Hidden", unmarked: "Unmarked", markDone: "Mark completed", markHide: "Hide",
+    "f-st": "Progress", done: "Completed", hid: "Hidden", unmarked: "Unmarked", markDone: "Complete quest", markHide: "Hide quest", stepDone: "Complete step", stepHide: "Hide step",
     showHid: "Show hidden quests", hideHid: "Hide hidden quests",
-    clearMark: "Clear mark", export: "Export progress", resetMarks: "Reset progress", import: "Import progress", importBad: "Could not read the progress file.",
+    clearMark: "Clear quest mark", export: "Export progress", resetMarks: "Reset progress", import: "Import progress", importBad: "Could not read the progress file.",
     importAsk: (n) => `Import ${n} marks? This replaces all current marks.`, resetAsk: (n) => `Clear all ${n} completed/hidden marks?`,
     footer: "Data extracted from the vanilla game files (Story/Journal quest, objective and category prototypes and Markers; Levelmaps XP and gold tables). Acts come from the levels of objective markers.",
   },
@@ -49,11 +49,11 @@ let ui = pickUi();
 let tech = false;
 try { tech = localStorage.getItem("tech") === "1"; } catch (e) { /* storage blocked */ }
 // completed/hidden marks ("done" | "hide") per quest ID, and per step as "questID::stepID", saved in this browser.
-// "hide" is for quests and steps a playthrough's branch never reaches; older saves called it "fail".
+// "hide" is for quests and steps a playthrough's branch never reaches.
 let marks = {};
 try { marks = JSON.parse(localStorage.getItem("marks")) || {}; } catch (e) { /* storage blocked or bad JSON */ }
-const markOf = (st) => (st === "done" ? "done" : st === "hide" || st === "fail" ? "hide" : "");
-marks = Object.fromEntries(Object.entries(marks).map(([k, v]) => [k, markOf(v)]).filter((e) => e[1]));
+const isMark = (st) => st === "done" || st === "hide";
+marks = Object.fromEntries(Object.entries(marks).filter((e) => isMark(e[1])));
 // hidden quests and steps stay out of view until this is on
 let showHid = false;
 try { showHid = localStorage.getItem("showHid") === "1"; } catch (e) { /* storage blocked */ }
@@ -176,7 +176,7 @@ function stepHtml(s, i) {
   ];
   const key = current.id + "::" + s.id, m = marks[key] || "";
   if (m === "hide" && !showHid) return "";
-  const btns = [["done", "done"], ["hide", "markHide"]].map(([k, l]) =>
+  const btns = [["done", "stepDone"], ["hide", "stepHide"]].map(([k, l]) =>
     `<button type="button" data-smark="${esc(s.id)}" data-k="${k}" class="${k}${m === k ? " on" : ""}">${T(l)}</button>`).join("");
   return `<div class="step${m ? " " + m : ""}" id="step-${i}"><div class="hd"><b>${i + 1}</b><span class="tech">${code(s.id)}</span>` +
     `<span class="toggle marks">${btns}</span></div>` +
@@ -270,7 +270,7 @@ function importMarks(file) {
     const list = JSON.parse(txt).marks;
     if (!Array.isArray(list)) throw new Error("no marks");
     const next = {};
-    list.forEach((m) => { if (m && typeof m.id === "string" && markOf(m.status)) next[m.id] = markOf(m.status); });
+    list.forEach((m) => { if (m && typeof m.id === "string" && isMark(m.status)) next[m.id] = m.status; });
     if (!confirm(T("importAsk", Object.keys(next).length))) return;
     marks = next;
     saveMarks();
