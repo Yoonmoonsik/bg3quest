@@ -15,7 +15,8 @@ const I18N = {
     rewardTarget: "보상 대상(QuestRewardTarget)", sort: "정렬 우선순위", guid: "GUID", handle: "제목 핸들",
     priority: "우선순위", techShow: "기술 정보 표시", techHide: "기술 정보 숨기기", help: "도움말", markers: "마커", noMarker: "마커 정보 없음", target: "대상", radius: "반경",
     "f-st": "진행", done: "완료", failed: "실패", unmarked: "표시 안 함", markDone: "완료 표시", markFail: "실패 표시",
-    clearMark: "표시 초기화", export: "진행 내보내기", resetMarks: "진행 초기화", resetAsk: (n) => `완료·실패 표시 ${n}개를 모두 지울까요?`,
+    clearMark: "표시 초기화", export: "진행 내보내기", resetMarks: "진행 초기화", import: "진행 불러오기", importBad: "진행 파일을 읽을 수 없습니다.",
+    importAsk: (n) => `${n}개 표시를 불러옵니다. 지금 표시는 모두 바뀝니다. 계속할까요?`, resetAsk: (n) => `완료·실패 표시 ${n}개를 모두 지울까요?`,
     footer: "데이터: 바닐라 게임 파일(Story/Journal의 quest·objective·questcategory 프로토타입과 Markers, Levelmaps의 경험치·골드 표)에서 추출. 막은 목표 마커의 레벨로 분류했습니다.",
   },
   en: {
@@ -33,7 +34,8 @@ const I18N = {
     rewardTarget: "QuestRewardTarget", sort: "Sorting priority", guid: "GUID", handle: "Title handle",
     priority: "Priority", techShow: "Show technical info", techHide: "Hide technical info", help: "Help", markers: "Markers", noMarker: "No marker data", target: "Target", radius: "Radius",
     "f-st": "Progress", done: "Completed", failed: "Failed", unmarked: "Unmarked", markDone: "Mark completed", markFail: "Mark failed",
-    clearMark: "Clear mark", export: "Export progress", resetMarks: "Reset progress", resetAsk: (n) => `Clear all ${n} completed/failed marks?`,
+    clearMark: "Clear mark", export: "Export progress", resetMarks: "Reset progress", import: "Import progress", importBad: "Could not read the progress file.",
+    importAsk: (n) => `Import ${n} marks? This replaces all current marks.`, resetAsk: (n) => `Clear all ${n} completed/failed marks?`,
     footer: "Data extracted from the vanilla game files (Story/Journal quest, objective and category prototypes and Markers; Levelmaps XP and gold tables). Acts come from the levels of objective markers.",
   },
 };
@@ -231,6 +233,22 @@ function exportMarks() {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
+// reads a file made by exportMarks and replaces the current marks
+function importMarks(file) {
+  file.text().then((txt) => {
+    const list = JSON.parse(txt).marks;
+    if (!Array.isArray(list)) throw new Error("no marks");
+    const next = {};
+    list.forEach((m) => { if (m && typeof m.id === "string" && (m.status === "done" || m.status === "fail")) next[m.id] = m.status; });
+    if (!confirm(T("importAsk", Object.keys(next).length))) return;
+    marks = next;
+    saveMarks();
+    fillFilters();
+    apply();
+    if (current) show(current);
+  }).catch(() => alert(T("importBad")));
+}
+
 function resetMarks() {
   const n = Object.keys(marks).length;
   if (!n || !confirm(T("resetAsk", n))) return;
@@ -272,6 +290,8 @@ FILTERS.forEach((id) => ($(id).onchange = apply));
 $("reset").onclick = () => { $("q").value = ""; FILTERS.forEach((id) => ($(id).value = "")); apply(); if (current) show(current); };
 $("export").onclick = exportMarks;
 $("reset-marks").onclick = resetMarks;
+$("import").onclick = () => $("import-file").click();
+$("import-file").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) importMarks(f); };
 $("list").onclick = (e) => {
   const li = e.target.closest("li[data-id]");
   if (li) location.hash = encodeURIComponent(li.dataset.id);
