@@ -7,7 +7,7 @@ const I18N = {
     all: "전체", reset: "필터 초기화", shown: (n) => `${n}개 표시`, pick: "왼쪽 목록에서 퀘스트를 선택하세요.",
     visible: "표시", hidden: "숨김", hasXp: "경험치 있음", hasTable: "보상 테이블 있음", hasGold: "골드 있음", hasAch: "도전 과제 연결",
     steps: "단계", objectives: "목표", rewards: "퀘스트 보상", data: "데이터", none: "(설명 없음)", noTitle: "(제목 없음)",
-    related: "관련 퀘스트", hiddenQ: "일지 숨김",
+    related: "관련 퀘스트", summary: (d, h) => `완료 ${d} · 숨김 ${h}`, allStepsDone: "모든 단계를 처리했습니다", hiddenQ: "일지 숨김",
     stepId: "단계 ID", objective: "목표", dev: "개발 메모", xp: "경험치", lv: (n) => `${n}레벨`,
     gold: "추가 골드", ach: "도전 과제", tt: "추가 트레저 테이블", owner: "보상 소유자", lo: "레벨 덮어쓰기", rep: "평판",
     rc: "보상 개수", rl: "보상 레벨", ud: "UnlockDisable", flag: "대화 플래그 GUID", stg: "StatTrigger GUID",
@@ -29,7 +29,7 @@ const I18N = {
     all: "All", reset: "Reset filters", shown: (n) => `${n} shown`, pick: "Pick a quest from the list.",
     visible: "Visible", hidden: "Hidden", hasXp: "Gives XP", hasTable: "Has reward table", hasGold: "Gives gold", hasAch: "Linked achievement",
     steps: "Steps", objectives: "Objectives", rewards: "Quest rewards", data: "Data", none: "(no text)", noTitle: "(no title)",
-    related: "Related quests", hiddenQ: "Hidden in journal",
+    related: "Related quests", summary: (d, h) => `completed ${d} · hidden ${h}`, allStepsDone: "Every step is handled", hiddenQ: "Hidden in journal",
     stepId: "Step ID", objective: "Objective", dev: "Dev comment", xp: "Experience", lv: (n) => `Lv ${n}`,
     gold: "Additional gold", ach: "Achievement", tt: "Additional treasure table", owner: "Reward owner", lo: "Level override", rep: "Reputation",
     rc: "Reward count", rl: "Reward level", ud: "UnlockDisable", flag: "Dialog flag GUID", stg: "StatTrigger GUID",
@@ -93,7 +93,8 @@ const clean = (s) => (s && !s.startsWith("%%%") ? s : "");
 // game text: keep <br>, <b>, <i>; drop LSTag and other markup but keep its inner text
 const plain = (s) => clean(s).replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "");
 const tx = (t) => (ui === "en" ? plain(t[1]) : plain(t[0]) || plain(t[1]));
-const qTitle = (q) => tx(q.t) || q.id;
+// untitled quests show their ID only while technical info is on
+const qTitle = (q) => tx(q.t) || (tech ? q.id : T("noTitle"));
 const catName = (c) => (data.categories[c] && tx(data.categories[c].t)) || c;
 const actName = (a) => (ui === "en" ? a[1] : a[0]);
 const ACT_ORDER = ["프롤로그", "1막", "2막", "3막", "엔딩", "에필로그"];
@@ -124,17 +125,23 @@ function fillFilters() {
   const cats = {}, acts = {};
   quests.forEach((q) => {
     cats[q.c] = (cats[q.c] || 0) + 1;
-    q.ac.forEach((a) => (acts[a[0]] = acts[a[0]] || [a, 0])[1]++);
+    // act options show completed/total; hidden quests count toward neither side
+    q.ac.forEach((a) => {
+      const e = (acts[a[0]] = acts[a[0]] || [a, 0, 0]);
+      if (marks[q.id] !== "hide") e[1]++;
+      if (marks[q.id] === "done") e[2]++;
+    });
   });
   const opt = (v, l, n) => `<option value="${esc(v)}">${esc(l)}${n == null ? "" : ` (${n})`}</option>`;
   const all = `<option value="">${T("all")}</option>`;
   $("f-c").innerHTML = all + Object.keys(cats).sort(catOrder).map((c) => opt(c, catName(c), cats[c])).join("");
   $("f-ac").innerHTML = all + Object.keys(acts).sort((a, b) => ACT_ORDER.indexOf(a) - ACT_ORDER.indexOf(b))
-    .map((k) => opt(k, actName(acts[k][0]), acts[k][1])).join("");
+    .map((k) => opt(k, actName(acts[k][0]), `${acts[k][2]}/${acts[k][1]}`)).join("");
   $("f-v").innerHTML = all + opt("1", T("visible")) + opt("0", T("hidden"));
   $("f-rw").innerHTML = all + ["xp", "table", "gold", "ach"].map((k) => opt(k, T("has" + k[0].toUpperCase() + k.slice(1)))).join("");
   const st = { done: 0, hide: 0 };
   quests.forEach((q) => marks[q.id] && st[marks[q.id]]++);
+  $("total").textContent = `· ${quests.length.toLocaleString()} ${T("unit")} · ${T("summary", st.done, st.hide)}`;
   $("f-st").innerHTML = all + opt("done", T("done"), st.done) + opt("hide", T("hid"), st.hide) +
     opt("none", T("unmarked"), quests.length - st.done - st.hide);
   FILTERS.forEach((id, i) => ($(id).value = filled ? keep[i] : FILTER_DEFAULT[id] || ""));
@@ -180,7 +187,8 @@ function apply() {
   $("list").innerHTML = html;
 }
 
-const qLink = (id) => `<a class="chip" href="#${encodeURIComponent(id)}">${esc(byId[id] ? qTitle(byId[id]) : id)}</a>`;
+const MARK_ICON = { done: "✔ ", hide: "⊘ " };
+const qLink = (id) => `<a class="chip ${marks[id] || ""}" href="#${encodeURIComponent(id)}">${MARK_ICON[marks[id]] || ""}${esc(byId[id] ? qTitle(byId[id]) : id)}</a>`;
 // a third element marks a row as technical (hidden unless the technical toggle is on)
 const dl = (rows) => `<dl>${rows.filter((r) => r[1] !== "" && r[1] != null)
   .map(([k, v, t]) => `<dt${t ? ' class="tech"' : ""}>${esc(k)}</dt><dd${t ? ' class="tech"' : ""}>${v}</dd>`).join("")}</dl>`;
@@ -239,11 +247,14 @@ function show(q) {
     [T("optTables"), q.rwo.map(code).join("<br>")],
     [T("tmpl"), q.rtd.map((r) => `${esc(r.n)} <span class="tech">${code(r.g)}</span>${r.l ? " @ " + esc(r.l) : ""}`).join("<br>")],
   ].filter((r) => r[1]);
+  // every non-hidden step completed but the quest itself not marked yet
+  const sc = stepCount(q), ready = !marks[q.id] && sc.total > 0 && sc.done === sc.total;
   $("detail").innerHTML =
     `<h2 class="title">${esc(qTitle(q)) || T("noTitle")}</h2>` +
     `<div class="chips">${chips.join("")}</div>` +
     `<div class="toggle marks">${[["done", "markDone"], ["hide", "markHide"]].map(([k, l]) =>
-      `<button type="button" data-qmark="${k}" class="${k}${marks[q.id] === k ? " on" : ""}">${T(l)}</button>`).join("")}</div>` +
+      `<button type="button" data-qmark="${k}" class="${k}${marks[q.id] === k ? " on" : ""}${k === "done" && ready ? " ready" : ""}"` +
+      `${k === "done" && ready ? ` title="${T("allStepsDone")}"` : ""}>${T(l)}</button>`).join("")}</div>` +
     dl(rel) +
     (rewards.length ? `<section><h3>${T("rewards")}</h3>${dl(rewards)}</section>` : "") +
     `<section><h3>${T("steps")} (${q.steps.length}) <span class="prog">${esc((({ done, total, hid }) => T("stepSum", done, total, hid))(stepCount(q)))}</span></h3>` +
@@ -361,6 +372,7 @@ function route() {
     show(byId[id]);
     apply();
     window.scrollTo(0, 0);
+    document.querySelector("#list li.on")?.scrollIntoView({ block: "nearest" });
   }
   else if (!current) $("detail").innerHTML = `<p class="empty">${T("pick")}</p>`;
 }
@@ -375,7 +387,6 @@ function applyUi() {
   $("help").href = "help.html?lang=" + ui;
   $("q").placeholder = T("q");
   if (!data) return;
-  $("total").textContent = `· ${quests.length.toLocaleString()} ${T("unit")}`;
   fillFilters();
   apply();
   current ? show(current) : route();
@@ -427,12 +438,26 @@ function toggleTech() {
   tech = !tech;
   try { localStorage.setItem("tech", tech ? "1" : "0"); } catch (e) { /* storage blocked */ }
   showTech();
-  if (data) apply();
+  if (!data) return;
+  fillFilters();
+  apply();
+  if (current) show(current);
 }
 $("tech").onclick = toggleTech;
 addEventListener("keydown", (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey || (e.target instanceof Element && e.target.closest("input, select, textarea"))) return;
-  if (e.code === "KeyT") { e.preventDefault(); toggleTech(); } // physical key, so t, T, ㅅ and ㅆ all count
+  // physical keys, so Korean input mode works too (t/ㅅ, c/ㅊ, h/ㅗ)
+  if (e.code === "KeyT") { e.preventDefault(); toggleTech(); }
+  else if ((e.code === "KeyC" || e.code === "KeyH") && current) { e.preventDefault(); setQuestMark(current, e.code === "KeyC" ? "done" : "hide"); }
+  else if (e.code === "ArrowDown" || e.code === "ArrowUp") {
+    // move through the quests shown in the list
+    const ids = [...document.querySelectorAll("#list li[data-id]")].map((li) => li.dataset.id);
+    if (!ids.length) return;
+    e.preventDefault();
+    const i = current ? ids.indexOf(current.id) : -1;
+    const next = e.code === "ArrowDown" ? ids[Math.min(i + 1, ids.length - 1)] : ids[Math.max(i - 1, 0)];
+    location.hash = encodeURIComponent(next);
+  }
 });
 
 applyUi();
