@@ -31,15 +31,17 @@ h1 { margin: 0; font-size: 24px; color: var(--accent); letter-spacing: .02em; }
 .filters button { cursor: pointer; }
 .mark-tools { display: flex; gap: 8px; }
 #list li.done .t::before { content: "✔ "; color: #6aa84f; }
-#list li.fail .t::before { content: "✘ "; color: #cc5a4a; }
-#list li.done .t, #list li.fail .t { color: var(--muted); }
+#list li.hide .t::before { content: "⊘ "; }
+#list li.done .t, #list li.hide .t { color: var(--muted); }
 .step .hd .marks { margin: 0 0 0 auto; }
 .step .hd .marks button { padding: 0 8px; font-size: 12px; }
 .step.done { border-color: #6aa84f; }
-.step.fail { border-color: #cc5a4a; }
-.step.done .txt, .step.fail .txt { color: var(--muted); }
+.step.hide { border-style: dashed; opacity: .6; }
+.step.done .txt, .step.hide .txt { color: var(--muted); }
 .marks button.done.on { border-color: #6aa84f; color: #6aa84f; }
-.marks button.fail.on { border-color: #cc5a4a; color: #cc5a4a; }
+.marks button.hide.on { border-color: var(--muted); color: var(--text); }
+#list li.hide { opacity: .6; }
+#show-hid.on { border-color: var(--accent); color: var(--accent); }
 .count { margin: 2px 0; font-size: 13px; color: var(--muted); }
 #list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; border-top: 1px solid var(--line); }
 #list li { padding: 8px 6px; border-bottom: 1px solid var(--line); cursor: pointer; }

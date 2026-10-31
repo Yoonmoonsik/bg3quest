@@ -14,9 +14,10 @@ const I18N = {
     titleOverride: "제목 덮어쓰기", tables: "보상 테이블", optTables: "선택 보상 테이블", tmpl: "보상 템플릿 설명",
     rewardTarget: "보상 대상(QuestRewardTarget)", sort: "정렬 우선순위", guid: "GUID", handle: "제목 핸들",
     priority: "우선순위", techShow: "기술 정보 표시", techHide: "기술 정보 숨기기", help: "도움말", markers: "마커", noMarker: "마커 정보 없음", target: "대상", radius: "반경",
-    "f-st": "진행", done: "완료", failed: "실패", unmarked: "표시 안 함", markDone: "완료 표시", markFail: "실패 표시",
+    "f-st": "진행", done: "완료", hid: "숨김", unmarked: "표시 안 함", markDone: "완료 표시", markHide: "숨기기",
+    showHid: "숨긴 퀘스트 보기", hideHid: "숨긴 퀘스트 숨기기",
     clearMark: "표시 초기화", export: "진행 내보내기", resetMarks: "진행 초기화", import: "진행 불러오기", importBad: "진행 파일을 읽을 수 없습니다.",
-    importAsk: (n) => `${n}개 표시를 불러옵니다. 지금 표시는 모두 바뀝니다. 계속할까요?`, resetAsk: (n) => `완료·실패 표시 ${n}개를 모두 지울까요?`,
+    importAsk: (n) => `${n}개 표시를 불러옵니다. 지금 표시는 모두 바뀝니다. 계속할까요?`, resetAsk: (n) => `완료·숨김 표시 ${n}개를 모두 지울까요?`,
     footer: "데이터: 바닐라 게임 파일(Story/Journal의 quest·objective·questcategory 프로토타입과 Markers, Levelmaps의 경험치·골드 표)에서 추출. 막은 목표 마커의 레벨로 분류했습니다.",
   },
   en: {
@@ -33,9 +34,10 @@ const I18N = {
     titleOverride: "Title override", tables: "Reward tables", optTables: "Optional reward tables", tmpl: "Reward template descriptions",
     rewardTarget: "QuestRewardTarget", sort: "Sorting priority", guid: "GUID", handle: "Title handle",
     priority: "Priority", techShow: "Show technical info", techHide: "Hide technical info", help: "Help", markers: "Markers", noMarker: "No marker data", target: "Target", radius: "Radius",
-    "f-st": "Progress", done: "Completed", failed: "Failed", unmarked: "Unmarked", markDone: "Mark completed", markFail: "Mark failed",
+    "f-st": "Progress", done: "Completed", hid: "Hidden", unmarked: "Unmarked", markDone: "Mark completed", markHide: "Hide",
+    showHid: "Show hidden quests", hideHid: "Hide hidden quests",
     clearMark: "Clear mark", export: "Export progress", resetMarks: "Reset progress", import: "Import progress", importBad: "Could not read the progress file.",
-    importAsk: (n) => `Import ${n} marks? This replaces all current marks.`, resetAsk: (n) => `Clear all ${n} completed/failed marks?`,
+    importAsk: (n) => `Import ${n} marks? This replaces all current marks.`, resetAsk: (n) => `Clear all ${n} completed/hidden marks?`,
     footer: "Data extracted from the vanilla game files (Story/Journal quest, objective and category prototypes and Markers; Levelmaps XP and gold tables). Acts come from the levels of objective markers.",
   },
 };
@@ -46,12 +48,18 @@ let ui = pickUi();
 // technical rows (IDs, GUIDs, dev comments) start hidden; the choice lives only in this browser
 let tech = false;
 try { tech = localStorage.getItem("tech") === "1"; } catch (e) { /* storage blocked */ }
-// completed/failed marks ("done" | "fail") per quest ID, and per step as "questID::stepID", saved in this browser
+// completed/hidden marks ("done" | "hide") per quest ID, and per step as "questID::stepID", saved in this browser.
+// "hide" is for quests and steps a playthrough's branch never reaches; older saves called it "fail".
 let marks = {};
 try { marks = JSON.parse(localStorage.getItem("marks")) || {}; } catch (e) { /* storage blocked or bad JSON */ }
-// collapsed category groups in the list, saved in this browser
-let folded = new Set();
-try { folded = new Set(JSON.parse(localStorage.getItem("folded")) || []); } catch (e) { /* storage blocked or bad JSON */ }
+const markOf = (st) => (st === "done" ? "done" : st === "hide" || st === "fail" ? "hide" : "");
+marks = Object.fromEntries(Object.entries(marks).map(([k, v]) => [k, markOf(v)]).filter((e) => e[1]));
+// hidden quests and steps stay out of view until this is on
+let showHid = false;
+try { showHid = localStorage.getItem("showHid") === "1"; } catch (e) { /* storage blocked */ }
+// category groups start collapsed; the ones opened are saved in this browser
+let opened = new Set();
+try { opened = new Set(JSON.parse(localStorage.getItem("opened")) || []); } catch (e) { /* storage blocked or bad JSON */ }
 function saveMarks() {
   try { localStorage.setItem("marks", JSON.stringify(marks)); } catch (e) { /* storage blocked */ }
 }
@@ -102,10 +110,10 @@ function fillFilters() {
     .map((k) => opt(k, actName(acts[k][0]), acts[k][1])).join("");
   $("f-v").innerHTML = all + opt("1", T("visible")) + opt("0", T("hidden"));
   $("f-rw").innerHTML = all + ["xp", "table", "gold", "ach"].map((k) => opt(k, T("has" + k[0].toUpperCase() + k.slice(1)))).join("");
-  const st = { done: 0, fail: 0 };
+  const st = { done: 0, hide: 0 };
   quests.forEach((q) => marks[q.id] && st[marks[q.id]]++);
-  $("f-st").innerHTML = all + opt("done", T("done"), st.done) + opt("fail", T("failed"), st.fail) +
-    opt("none", T("unmarked"), quests.length - st.done - st.fail);
+  $("f-st").innerHTML = all + opt("done", T("done"), st.done) + opt("hide", T("hid"), st.hide) +
+    opt("none", T("unmarked"), quests.length - st.done - st.hide);
   FILTERS.forEach((id, i) => ($(id).value = keep[i]));
 }
 
@@ -120,14 +128,15 @@ function apply() {
   const f = Object.fromEntries(FILTERS.map((id) => [id, $(id).value]));
   const shown = quests.filter((x) => (!q || x._h.includes(q)) && (!f["f-c"] || x.c === f["f-c"]) &&
     (!f["f-ac"] || x.ac.some((a) => a[0] === f["f-ac"])) && (!f["f-v"] || x.vis === (f["f-v"] === "1")) &&
-    (!f["f-rw"] || REWARD[f["f-rw"]](x)) && (!f["f-st"] || (marks[x.id] || "none") === f["f-st"]));
+    (!f["f-rw"] || REWARD[f["f-rw"]](x)) && (!f["f-st"] || (marks[x.id] || "none") === f["f-st"]) &&
+    (showHid || f["f-st"] === "hide" || marks[x.id] !== "hide"));
   $("count").textContent = T("shown", shown.length);
   shown.sort((a, b) => catOrder(a.c, b.c) || qTitle(a).localeCompare(qTitle(b), ui));
   const per = {};
   shown.forEach((x) => (per[x.c] = (per[x.c] || 0) + 1));
   let html = "", last = null;
   shown.forEach((x) => {
-    const shut = folded.has(x.c);
+    const shut = !opened.has(x.c);
     if (x.c !== last) {
       html += `<li class="grp${shut ? " shut" : ""}" data-grp="${esc(x.c)}">${esc(catName(x.c))} <span>(${per[x.c]})</span></li>`;
       last = x.c;
@@ -166,7 +175,8 @@ function stepHtml(s, i) {
     [T("flag"), s.fl ? code(s.fl) : "", 1], [T("stg"), s.stg ? code(s.stg) : "", 1], [T("guid"), code(s.g), 1],
   ];
   const key = current.id + "::" + s.id, m = marks[key] || "";
-  const btns = [["done", "done"], ["fail", "failed"]].map(([k, l]) =>
+  if (m === "hide" && !showHid) return "";
+  const btns = [["done", "done"], ["hide", "markHide"]].map(([k, l]) =>
     `<button type="button" data-smark="${esc(s.id)}" data-k="${k}" class="${k}${m === k ? " on" : ""}">${T(l)}</button>`).join("");
   return `<div class="step${m ? " " + m : ""}" id="step-${i}"><div class="hd"><b>${i + 1}</b><span class="tech">${code(s.id)}</span>` +
     `<span class="toggle marks">${btns}</span></div>` +
@@ -208,7 +218,7 @@ function show(q) {
   $("detail").innerHTML =
     `<h2 class="title">${esc(qTitle(q)) || T("noTitle")}</h2>` + (en ? `<p class="title-en">${esc(en)}</p>` : "") +
     `<div class="chips">${chips.join("")}</div>` +
-    `<div class="toggle marks">${[["done", "markDone"], ["fail", "markFail"]].map(([k, l]) =>
+    `<div class="toggle marks">${[["done", "markDone"], ["hide", "markHide"]].map(([k, l]) =>
       `<button type="button" data-mark="${k}" class="${k}${marks[q.id] === k ? " on" : ""}">${T(l)}</button>`).join("")}` +
     (marks[q.id] ? `<button type="button" data-mark="">${T("clearMark")}</button>` : "") + `</div>` + dl(rel) +
     (ui === "ko" ? `<div class="toggle"><button type="button" id="en-toggle" class="${withEn ? "on" : ""}">${T("showEn")}</button></div>` : "") +
@@ -260,7 +270,7 @@ function importMarks(file) {
     const list = JSON.parse(txt).marks;
     if (!Array.isArray(list)) throw new Error("no marks");
     const next = {};
-    list.forEach((m) => { if (m && typeof m.id === "string" && (m.status === "done" || m.status === "fail")) next[m.id] = m.status; });
+    list.forEach((m) => { if (m && typeof m.id === "string" && markOf(m.status)) next[m.id] = markOf(m.status); });
     if (!confirm(T("importAsk", Object.keys(next).length))) return;
     marks = next;
     saveMarks();
@@ -292,6 +302,7 @@ function applyUi() {
   document.querySelectorAll("[data-i18n]").forEach((el) => (el.textContent = T(el.dataset.i18n)));
   document.querySelectorAll("[data-ui]").forEach((b) => b.classList.toggle("on", b.dataset.ui === ui));
   showTech();
+  showHidBtn();
   $("help").href = "help.html?lang=" + ui;
   $("q").placeholder = T("q");
   if (!data) return;
@@ -311,13 +322,25 @@ FILTERS.forEach((id) => ($(id).onchange = apply));
 $("reset").onclick = () => { $("q").value = ""; FILTERS.forEach((id) => ($(id).value = "")); apply(); if (current) show(current); };
 $("export").onclick = exportMarks;
 $("reset-marks").onclick = resetMarks;
+function showHidBtn() {
+  $("show-hid").classList.toggle("on", showHid);
+  $("show-hid").textContent = T(showHid ? "hideHid" : "showHid");
+}
+$("show-hid").onclick = () => {
+  showHid = !showHid;
+  try { localStorage.setItem("showHid", showHid ? "1" : "0"); } catch (e) { /* storage blocked */ }
+  showHidBtn();
+  if (!data) return;
+  apply();
+  if (current) show(current);
+};
 $("import").onclick = () => $("import-file").click();
 $("import-file").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) importMarks(f); };
 $("list").onclick = (e) => {
   const g = e.target.closest("li[data-grp]");
   if (g) {
-    folded.has(g.dataset.grp) ? folded.delete(g.dataset.grp) : folded.add(g.dataset.grp);
-    try { localStorage.setItem("folded", JSON.stringify([...folded])); } catch (e2) { /* storage blocked */ }
+    opened.has(g.dataset.grp) ? opened.delete(g.dataset.grp) : opened.add(g.dataset.grp);
+    try { localStorage.setItem("opened", JSON.stringify([...opened])); } catch (e2) { /* storage blocked */ }
     apply();
     return;
   }
