@@ -7,7 +7,7 @@ const I18N = {
     all: "전체", reset: "필터 초기화", shown: (n) => `${n}개 표시`, pick: "왼쪽 목록에서 퀘스트를 선택하세요.",
     visible: "표시", hidden: "숨김", hasXp: "경험치 있음", hasTable: "보상 테이블 있음", hasGold: "골드 있음", hasAch: "도전 과제 연결",
     steps: "단계", objectives: "목표", rewards: "퀘스트 보상", data: "데이터", none: "(설명 없음)", noTitle: "(제목 없음)",
-    parent: "상위 퀘스트", subs: "하위 퀘스트", children: "이 퀘스트를 상위로 둔 퀘스트", hiddenQ: "일지 숨김",
+    related: "관련 퀘스트", hiddenQ: "일지 숨김",
     stepId: "단계 ID", objective: "목표", dev: "개발 메모", xp: "경험치", lv: (n) => `${n}레벨`,
     gold: "추가 골드", ach: "도전 과제", tt: "추가 트레저 테이블", owner: "보상 소유자", lo: "레벨 덮어쓰기", rep: "평판",
     rc: "보상 개수", rl: "보상 레벨", ud: "UnlockDisable", flag: "대화 플래그 GUID", stg: "StatTrigger GUID",
@@ -29,7 +29,7 @@ const I18N = {
     all: "All", reset: "Reset filters", shown: (n) => `${n} shown`, pick: "Pick a quest from the list.",
     visible: "Visible", hidden: "Hidden", hasXp: "Gives XP", hasTable: "Has reward table", hasGold: "Gives gold", hasAch: "Linked achievement",
     steps: "Steps", objectives: "Objectives", rewards: "Quest rewards", data: "Data", none: "(no text)", noTitle: "(no title)",
-    parent: "Parent quest", subs: "Subquests", children: "Quests with this as parent", hiddenQ: "Hidden in journal",
+    related: "Related quests", hiddenQ: "Hidden in journal",
     stepId: "Step ID", objective: "Objective", dev: "Dev comment", xp: "Experience", lv: (n) => `Lv ${n}`,
     gold: "Additional gold", ach: "Achievement", tt: "Additional treasure table", owner: "Reward owner", lo: "Level override", rep: "Reputation",
     rc: "Reward count", rl: "Reward level", ud: "UnlockDisable", flag: "Dialog flag GUID", stg: "StatTrigger GUID",
@@ -226,14 +226,13 @@ function objHtml(o) {
 function show(q) {
   current = q;
   document.querySelectorAll("#list li[data-id]").forEach((li) => li.classList.toggle("on", li.dataset.id === q.id));
-  const kids = quests.filter((x) => x.p === q.id);
   const chips = [`<span class="chip cat">${esc(catName(q.c))}</span>`]
     .concat(q.ac.map((a) => `<span class="chip">${esc(actName(a))}</span>`))
     .concat(q.vis ? [] : [`<span class="chip">${T("hiddenQ")}</span>`]);
+  // parent, subquests and quests naming this one as parent, merged without duplicates
+  const related = [...new Set([...(q.p ? [q.p] : []), ...q.sub, ...quests.filter((x) => x.p === q.id).map((x) => x.id)])];
   const rel = [
-    [T("parent"), q.p ? qLink(q.p) : ""],
-    [T("subs"), q.sub.map(qLink).join(" ")],
-    [T("children"), kids.map((k) => qLink(k.id)).join(" ")],
+    [T("related"), related.map(qLink).join(" ")],
   ];
   const rewards = [
     [T("tables"), q.rw.map(code).join("<br>")],
