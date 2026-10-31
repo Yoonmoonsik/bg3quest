@@ -31,7 +31,10 @@ h1 { margin: 0; font-size: 24px; color: var(--accent); letter-spacing: .02em; }
 .filters button { cursor: pointer; }
 .mark-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 #list li.done .t::before { content: "✔ "; color: #6aa84f; }
-#list li.done .t { color: var(--muted); }
+#list li.done .t, #list li.hide .t { color: var(--muted); }
+#list li.hide .t::before { content: "⊘ "; }
+#list li.hide { opacity: .6; }
+#show-hid.on { border-color: var(--accent); color: var(--accent); }
 .step .hd .marks { margin: 0 0 0 auto; }
 .step .hd .marks button { padding: 0 8px; font-size: 12px; }
 .step.done { border-color: #6aa84f; }
