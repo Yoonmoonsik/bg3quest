@@ -14,6 +14,8 @@ const I18N = {
     titleOverride: "제목 덮어쓰기", tables: "보상 테이블", optTables: "선택 보상 테이블", tmpl: "보상 템플릿 설명",
     rewardTarget: "보상 대상(QuestRewardTarget)", sort: "정렬 우선순위", guid: "GUID", handle: "제목 핸들",
     priority: "우선순위", techShow: "기술 정보 표시", techHide: "기술 정보 숨기기", help: "도움말", markers: "마커", noMarker: "마커 정보 없음", target: "대상", radius: "반경",
+    "f-st": "진행", done: "완료", failed: "실패", unmarked: "표시 안 함", markDone: "완료 표시", markFail: "실패 표시",
+    clearMark: "표시 초기화", export: "진행 내보내기", resetMarks: "진행 초기화", resetAsk: (n) => `완료·실패 표시 ${n}개를 모두 지울까요?`,
     footer: "데이터: 바닐라 게임 파일(Story/Journal의 quest·objective·questcategory 프로토타입과 Markers, Levelmaps의 경험치·골드 표)에서 추출. 막은 목표 마커의 레벨로 분류했습니다.",
   },
   en: {
@@ -30,16 +32,24 @@ const I18N = {
     titleOverride: "Title override", tables: "Reward tables", optTables: "Optional reward tables", tmpl: "Reward template descriptions",
     rewardTarget: "QuestRewardTarget", sort: "Sorting priority", guid: "GUID", handle: "Title handle",
     priority: "Priority", techShow: "Show technical info", techHide: "Hide technical info", help: "Help", markers: "Markers", noMarker: "No marker data", target: "Target", radius: "Radius",
+    "f-st": "Progress", done: "Completed", failed: "Failed", unmarked: "Unmarked", markDone: "Mark completed", markFail: "Mark failed",
+    clearMark: "Clear mark", export: "Export progress", resetMarks: "Reset progress", resetAsk: (n) => `Clear all ${n} completed/failed marks?`,
     footer: "Data extracted from the vanilla game files (Story/Journal quest, objective and category prototypes and Markers; Levelmaps XP and gold tables). Acts come from the levels of objective markers.",
   },
 };
 const $ = (id) => document.getElementById(id);
-const FILTERS = ["f-c", "f-ac", "f-v", "f-rw"];
+const FILTERS = ["f-c", "f-ac", "f-v", "f-rw", "f-st"];
 let data = null, quests = [], byId = {}, current = null, withEn = false;
 let ui = pickUi();
 // technical rows (IDs, GUIDs, dev comments) start hidden; the choice lives only in this browser
 let tech = false;
 try { tech = localStorage.getItem("tech") === "1"; } catch (e) { /* storage blocked */ }
+// completed/failed marks per quest ID ("done" | "fail"), saved in this browser
+let marks = {};
+try { marks = JSON.parse(localStorage.getItem("marks")) || {}; } catch (e) { /* storage blocked or bad JSON */ }
+function saveMarks() {
+  try { localStorage.setItem("marks", JSON.stringify(marks)); } catch (e) { /* storage blocked */ }
+}
 
 function pickUi() {
   const q = new URLSearchParams(location.search).get("lang");
@@ -87,6 +97,10 @@ function fillFilters() {
     .map((k) => opt(k, actName(acts[k][0]), acts[k][1])).join("");
   $("f-v").innerHTML = all + opt("1", T("visible")) + opt("0", T("hidden"));
   $("f-rw").innerHTML = all + ["xp", "table", "gold", "ach"].map((k) => opt(k, T("has" + k[0].toUpperCase() + k.slice(1)))).join("");
+  const st = { done: 0, fail: 0 };
+  quests.forEach((q) => marks[q.id] && st[marks[q.id]]++);
+  $("f-st").innerHTML = all + opt("done", T("done"), st.done) + opt("fail", T("failed"), st.fail) +
+    opt("none", T("unmarked"), quests.length - st.done - st.fail);
   FILTERS.forEach((id, i) => ($(id).value = keep[i]));
 }
 
@@ -101,14 +115,15 @@ function apply() {
   const f = Object.fromEntries(FILTERS.map((id) => [id, $(id).value]));
   const shown = quests.filter((x) => (!q || x._h.includes(q)) && (!f["f-c"] || x.c === f["f-c"]) &&
     (!f["f-ac"] || x.ac.some((a) => a[0] === f["f-ac"])) && (!f["f-v"] || x.vis === (f["f-v"] === "1")) &&
-    (!f["f-rw"] || REWARD[f["f-rw"]](x)));
+    (!f["f-rw"] || REWARD[f["f-rw"]](x)) && (!f["f-st"] || (marks[x.id] || "none") === f["f-st"]));
   $("count").textContent = T("shown", shown.length);
   shown.sort((a, b) => catOrder(a.c, b.c) || qTitle(a).localeCompare(qTitle(b), ui));
   let html = "", last = null;
   shown.forEach((x) => {
     if (x.c !== last) { html += `<li class="grp">${esc(catName(x.c))}</li>`; last = x.c; }
     const meta = [...(tech ? [x.id] : []), x.steps.length + " " + T("steps")].concat(x.vis ? [] : [T("hiddenQ")]).join(" · ");
-    html += `<li data-id="${esc(x.id)}" class="${current && current.id === x.id ? "on" : ""}">` +
+    const cls = [current && current.id === x.id ? "on" : "", marks[x.id] || ""].join(" ").trim();
+    html += `<li data-id="${esc(x.id)}" class="${cls}">` +
       `<span class="t">${mark(qTitle(x))}</span><span class="m">${esc(meta)}</span></li>`;
   });
   $("list").innerHTML = html;
@@ -176,13 +191,17 @@ function show(q) {
   ].filter((r) => r[1]);
   $("detail").innerHTML =
     `<h2 class="title">${esc(qTitle(q)) || T("noTitle")}</h2>` + (en ? `<p class="title-en">${esc(en)}</p>` : "") +
-    `<div class="chips">${chips.join("")}</div>` + dl(rel) +
+    `<div class="chips">${chips.join("")}</div>` +
+    `<div class="toggle marks">${[["done", "markDone"], ["fail", "markFail"]].map(([k, l]) =>
+      `<button type="button" data-mark="${k}" class="${k}${marks[q.id] === k ? " on" : ""}">${T(l)}</button>`).join("")}` +
+    (marks[q.id] ? `<button type="button" data-mark="">${T("clearMark")}</button>` : "") + `</div>` + dl(rel) +
     (ui === "ko" ? `<div class="toggle"><button type="button" id="en-toggle" class="${withEn ? "on" : ""}">${T("showEn")}</button></div>` : "") +
     (rewards.length ? `<section><h3>${T("rewards")}</h3>${dl(rewards)}</section>` : "") +
     `<section><h3>${T("steps")} (${q.steps.length})</h3>${q.steps.map(stepHtml).join("")}</section>` +
     `<section><h3>${T("objectives")} (${q.obs.length})</h3>${q.obs.map(objHtml).join("")}</section>` +
     `<section class="tech"><h3>${T("data")}</h3>${dl([["QuestID", code(q.id)], ["CategoryID", code(q.c)], [T("guid"), code(q.g)],
       [T("handle"), code(q.t[2])], [T("sort"), q.sort], [T("rewardTarget"), q.rwt]])}</section>`;
+  $("detail").querySelectorAll("[data-mark]").forEach((b) => (b.onclick = () => setMark(q, b.dataset.mark)));
   const tg = $("en-toggle");
   if (tg) tg.onclick = () => { withEn = !withEn; show(q); };
   $("detail").querySelectorAll("[data-obj]").forEach((a) => (a.onclick = (e) => {
@@ -190,6 +209,36 @@ function show(q) {
     const el = document.getElementById("obj-" + a.dataset.obj);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
   }));
+}
+
+// clicking the active mark again clears it
+function setMark(q, k) {
+  if (!k || marks[q.id] === k) delete marks[q.id];
+  else marks[q.id] = k;
+  saveMarks();
+  fillFilters();
+  apply();
+  show(q);
+}
+
+function exportMarks() {
+  const out = Object.entries(marks).map(([id, st]) => ({ id, status: st, title: byId[id] ? qTitle(byId[id]) : "" }));
+  const blob = new Blob([JSON.stringify({ exported: new Date().toISOString(), marks: out }, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "bg3quest-progress.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function resetMarks() {
+  const n = Object.keys(marks).length;
+  if (!n || !confirm(T("resetAsk", n))) return;
+  marks = {};
+  saveMarks();
+  fillFilters();
+  apply();
+  if (current) show(current);
 }
 
 function route() {
@@ -221,6 +270,8 @@ document.querySelectorAll("[data-ui]").forEach((b) => (b.onclick = () => {
 $("q").oninput = () => { apply(); if (current) show(current); };
 FILTERS.forEach((id) => ($(id).onchange = apply));
 $("reset").onclick = () => { $("q").value = ""; FILTERS.forEach((id) => ($(id).value = "")); apply(); if (current) show(current); };
+$("export").onclick = exportMarks;
+$("reset-marks").onclick = resetMarks;
 $("list").onclick = (e) => {
   const li = e.target.closest("li[data-id]");
   if (li) location.hash = encodeURIComponent(li.dataset.id);

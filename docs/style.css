@@ -29,6 +29,12 @@ h1 { margin: 0; font-size: 24px; color: var(--accent); letter-spacing: .02em; }
 .filters input, .filters select, .filters button { width: 100%; padding: 7px 9px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 14px; }
 .filters label { display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
 .filters button { cursor: pointer; }
+.mark-tools { display: flex; gap: 8px; }
+#list li.done .t::before { content: "✔ "; color: #6aa84f; }
+#list li.fail .t::before { content: "✘ "; color: #cc5a4a; }
+#list li.done .t, #list li.fail .t { color: var(--muted); }
+.marks button.done.on { border-color: #6aa84f; color: #6aa84f; }
+.marks button.fail.on { border-color: #cc5a4a; color: #cc5a4a; }
 .count { margin: 2px 0; font-size: 13px; color: var(--muted); }
 #list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; border-top: 1px solid var(--line); }
 #list li { padding: 8px 6px; border-bottom: 1px solid var(--line); cursor: pointer; }
