@@ -1,6 +1,7 @@
 // UI strings. Game text comes from quests.json as [Korean, English, handle].
 const I18N = {
   ko: {
+    site_book: "BG3 책 열람실", site_dnd: "5.5e 모드 데이터 검색",
     title: "BG3 퀘스트 일지", sub: "발더스 게이트 3 일지의 퀘스트·단계·목표·마커·보상 데이터", unit: "개 퀘스트",
     q: "제목·단계 내용·ID 검색 (한/영)", "f-c": "분류", "f-ac": "막", "f-v": "일지 표시", "f-rw": "보상",
     all: "전체", reset: "필터 초기화", shown: (n) => `${n}개 표시`, pick: "왼쪽 목록에서 퀘스트를 선택하세요.",
@@ -16,6 +17,7 @@ const I18N = {
     footer: "데이터: 바닐라 게임 파일(Story/Journal의 quest·objective·questcategory 프로토타입과 Markers, Levelmaps의 경험치·골드 표)에서 추출. 막은 목표 마커의 레벨로 분류했습니다.",
   },
   en: {
+    site_book: "BG3 Book Library", site_dnd: "5.5e mod data browser",
     title: "BG3 Quest Journal", sub: "Quests, steps, objectives, markers and rewards from the Baldur's Gate 3 journal", unit: "quests",
     q: "Search title, step text or ID", "f-c": "Category", "f-ac": "Act", "f-v": "Journal", "f-rw": "Reward",
     all: "All", reset: "Reset filters", shown: (n) => `${n} shown`, pick: "Pick a quest from the list.",
