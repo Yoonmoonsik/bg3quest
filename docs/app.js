@@ -13,7 +13,7 @@ const I18N = {
     rc: "보상 개수", rl: "보상 레벨", ud: "UnlockDisable", flag: "대화 플래그 GUID", stg: "StatTrigger GUID",
     titleOverride: "제목 덮어쓰기", tables: "보상 테이블", optTables: "선택 보상 테이블", tmpl: "보상 템플릿 설명",
     rewardTarget: "보상 대상(QuestRewardTarget)", sort: "정렬 우선순위", guid: "GUID", handle: "제목 핸들",
-    priority: "우선순위", tech: "기술 정보", help: "도움말", markers: "마커", noMarker: "마커 정보 없음", target: "대상", radius: "반경",
+    priority: "우선순위", techShow: "기술 정보 표시", techHide: "기술 정보 숨기기", help: "도움말", markers: "마커", noMarker: "마커 정보 없음", target: "대상", radius: "반경",
     footer: "데이터: 바닐라 게임 파일(Story/Journal의 quest·objective·questcategory 프로토타입과 Markers, Levelmaps의 경험치·골드 표)에서 추출. 막은 목표 마커의 레벨로 분류했습니다.",
   },
   en: {
@@ -29,7 +29,7 @@ const I18N = {
     rc: "Reward count", rl: "Reward level", ud: "UnlockDisable", flag: "Dialog flag GUID", stg: "StatTrigger GUID",
     titleOverride: "Title override", tables: "Reward tables", optTables: "Optional reward tables", tmpl: "Reward template descriptions",
     rewardTarget: "QuestRewardTarget", sort: "Sorting priority", guid: "GUID", handle: "Title handle",
-    priority: "Priority", tech: "Technical info", help: "Help", markers: "Markers", noMarker: "No marker data", target: "Target", radius: "Radius",
+    priority: "Priority", techShow: "Show technical info", techHide: "Hide technical info", help: "Help", markers: "Markers", noMarker: "No marker data", target: "Target", radius: "Radius",
     footer: "Data extracted from the vanilla game files (Story/Journal quest, objective and category prototypes and Markers; Levelmaps XP and gold tables). Acts come from the levels of objective markers.",
   },
 };
@@ -130,7 +130,7 @@ function stepHtml(s, i) {
   const rows = [
     [T("objective"), s.ob ? `<a href="#" data-obj="${esc(s.ob)}">${code(s.ob)}</a>` : "", 1],
     [T("titleOverride"), s.to ? esc(tx(s.to)) : ""],
-    [T("xp"), s.xp ? xpCell(s.xp) : ""],
+    [T("xp"), s.xp ? xpCell(s.xp) : "", 1],
     [T("gold"), s.gold ? code(Object.values(s.gold).join(" · ")) : ""],
     [T("tt"), s.tt ? code(s.tt) : ""],
     [T("owner"), s.on || s.ol ? esc([s.on, s.ol].filter(Boolean).join(" @ ")) : ""],
@@ -203,8 +203,7 @@ function applyUi() {
   document.title = T("title");
   document.querySelectorAll("[data-i18n]").forEach((el) => (el.textContent = T(el.dataset.i18n)));
   document.querySelectorAll("[data-ui]").forEach((b) => b.classList.toggle("on", b.dataset.ui === ui));
-  document.body.classList.toggle("notech", !tech);
-  $("tech").classList.toggle("on", tech);
+  showTech();
   $("help").href = "help.html?lang=" + ui;
   $("q").placeholder = T("q");
   if (!data) return;
@@ -228,11 +227,16 @@ $("list").onclick = (e) => {
 };
 window.addEventListener("hashchange", route);
 
+// the button names what a click does: show while hidden, hide while shown
+function showTech() {
+  document.body.classList.toggle("notech", !tech);
+  $("tech").classList.toggle("on", tech);
+  $("tech").textContent = T(tech ? "techHide" : "techShow");
+}
 function toggleTech() {
   tech = !tech;
   try { localStorage.setItem("tech", tech ? "1" : "0"); } catch (e) { /* storage blocked */ }
-  document.body.classList.toggle("notech", !tech);
-  $("tech").classList.toggle("on", tech);
+  showTech();
   if (data) apply();
 }
 $("tech").onclick = toggleTech;
