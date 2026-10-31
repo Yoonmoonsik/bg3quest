@@ -59,7 +59,6 @@ h1 { margin: 0; font-size: 24px; color: var(--accent); letter-spacing: .02em; }
 main { padding: 16px 24px 40px; min-width: 0; }
 .empty { color: var(--muted); }
 .title { margin: 0 0 2px; font-size: 22px; }
-.title-en { margin: 0 0 8px; color: var(--muted); font-style: italic; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .chip { background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 1px 10px; font-size: 12px; }
 .chip.cat { border-color: var(--accent); color: var(--accent); }
@@ -77,7 +76,6 @@ section h3 .prog { color: var(--muted); font-size: 13px; font-weight: normal; ma
 .step .hd { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
 .step .hd b { color: var(--text); font-size: 13px; }
 .step .txt { white-space: pre-wrap; }
-.step .alt { white-space: pre-wrap; color: var(--muted); font-size: 13px; margin-top: 4px; }
 .step .dev { font-size: 12px; color: var(--muted); margin-top: 4px; }
 .step dl { margin-top: 6px; }
 table { border-collapse: collapse; width: 100%; font-size: 13px; }

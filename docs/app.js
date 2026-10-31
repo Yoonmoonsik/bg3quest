@@ -8,7 +8,7 @@ const I18N = {
     visible: "표시", hidden: "숨김", hasXp: "경험치 있음", hasTable: "보상 테이블 있음", hasGold: "골드 있음", hasAch: "도전 과제 연결",
     steps: "단계", objectives: "목표", rewards: "퀘스트 보상", data: "데이터", none: "(설명 없음)", noTitle: "(제목 없음)",
     parent: "상위 퀘스트", subs: "하위 퀘스트", children: "이 퀘스트를 상위로 둔 퀘스트", hiddenQ: "일지 숨김",
-    showEn: "영문 함께 보기", stepId: "단계 ID", objective: "목표", dev: "개발 메모", xp: "경험치", lv: (n) => `${n}레벨`,
+    stepId: "단계 ID", objective: "목표", dev: "개발 메모", xp: "경험치", lv: (n) => `${n}레벨`,
     gold: "추가 골드", ach: "도전 과제", tt: "추가 트레저 테이블", owner: "보상 소유자", lo: "레벨 덮어쓰기", rep: "평판",
     rc: "보상 개수", rl: "보상 레벨", ud: "UnlockDisable", flag: "대화 플래그 GUID", stg: "StatTrigger GUID",
     titleOverride: "제목 덮어쓰기", tables: "보상 테이블", optTables: "선택 보상 테이블", tmpl: "보상 템플릿 설명",
@@ -30,7 +30,7 @@ const I18N = {
     visible: "Visible", hidden: "Hidden", hasXp: "Gives XP", hasTable: "Has reward table", hasGold: "Gives gold", hasAch: "Linked achievement",
     steps: "Steps", objectives: "Objectives", rewards: "Quest rewards", data: "Data", none: "(no text)", noTitle: "(no title)",
     parent: "Parent quest", subs: "Subquests", children: "Quests with this as parent", hiddenQ: "Hidden in journal",
-    showEn: "", stepId: "Step ID", objective: "Objective", dev: "Dev comment", xp: "Experience", lv: (n) => `Lv ${n}`,
+    stepId: "Step ID", objective: "Objective", dev: "Dev comment", xp: "Experience", lv: (n) => `Lv ${n}`,
     gold: "Additional gold", ach: "Achievement", tt: "Additional treasure table", owner: "Reward owner", lo: "Level override", rep: "Reputation",
     rc: "Reward count", rl: "Reward level", ud: "UnlockDisable", flag: "Dialog flag GUID", stg: "StatTrigger GUID",
     titleOverride: "Title override", tables: "Reward tables", optTables: "Optional reward tables", tmpl: "Reward template descriptions",
@@ -47,7 +47,10 @@ const I18N = {
 };
 const $ = (id) => document.getElementById(id);
 const FILTERS = ["f-c", "f-ac", "f-v", "f-rw", "f-st"];
-let data = null, quests = [], byId = {}, current = null, withEn = false;
+// starting value of each filter, also restored by "Reset filters"; journal-hidden quests start filtered out
+const FILTER_DEFAULT = { "f-v": "1" };
+let filled = false;
+let data = null, quests = [], byId = {}, current = null;
 let ui = pickUi();
 // technical rows (IDs, GUIDs, dev comments) start hidden; the choice lives only in this browser
 let tech = false;
@@ -90,7 +93,6 @@ const clean = (s) => (s && !s.startsWith("%%%") ? s : "");
 // game text: keep <br>, <b>, <i>; drop LSTag and other markup but keep its inner text
 const plain = (s) => clean(s).replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "");
 const tx = (t) => (ui === "en" ? plain(t[1]) : plain(t[0]) || plain(t[1]));
-const txAlt = (t) => (ui === "ko" && withEn && plain(t[0]) ? plain(t[1]) : "");
 const qTitle = (q) => tx(q.t) || q.id;
 const catName = (c) => (data.categories[c] && tx(data.categories[c].t)) || c;
 const actName = (a) => (ui === "en" ? a[1] : a[0]);
@@ -135,7 +137,8 @@ function fillFilters() {
   quests.forEach((q) => marks[q.id] && st[marks[q.id]]++);
   $("f-st").innerHTML = all + opt("done", T("done"), st.done) + opt("hide", T("hid"), st.hide) +
     opt("none", T("unmarked"), quests.length - st.done - st.hide);
-  FILTERS.forEach((id, i) => ($(id).value = keep[i]));
+  FILTERS.forEach((id, i) => ($(id).value = filled ? keep[i] : FILTER_DEFAULT[id] || ""));
+  filled = true;
 }
 
 const REWARD = {
@@ -189,7 +192,6 @@ function xpCell(x) {
 }
 
 function stepHtml(s, i) {
-  const alt = txAlt(s.d);
   const rows = [
     [T("objective"), s.ob ? `<a href="#" data-obj="${esc(s.ob)}">${code(s.ob)}</a>` : "", 1],
     [T("titleOverride"), s.to ? esc(tx(s.to)) : ""],
@@ -208,7 +210,6 @@ function stepHtml(s, i) {
   return `<div class="step${m ? " " + m : ""}" id="step-${i}"><div class="hd"><b>${i + 1}</b><span class="tech">${code(s.id)}</span>` +
     `<span class="toggle marks">${btns}</span></div>` +
     `<div class="txt">${mark(tx(s.d)) || `<span class="empty">${T("none")}</span>`}</div>` +
-    (alt ? `<div class="alt">${mark(alt)}</div>` : "") +
     (s.dev ? `<div class="dev tech">${T("dev")}: ${mark(s.dev)}</div>` : "") + dl(rows) + `</div>`;
 }
 
@@ -218,16 +219,13 @@ function objHtml(o) {
     return `<div class="mk">📍 ${esc(tx(a.t) || m.id)} — ${esc(place)}<span class="tech"> ${code(a.lvl)} · ${esc(a.icon)} · ` +
       `${T("target")} ${esc(a.ty)} ${code(a.tg)}${a.r ? ` · ${T("radius")} ${a.r}` : ""}</span></div>`;
   }));
-  const alt = txAlt(o.d);
   return `<div class="obj" id="obj-${esc(o.id)}"><div>${mark(tx(o.d)) || `<span class="empty">${T("none")}</span>`}</div>` +
-    (alt ? `<div class="mk">${mark(alt)}</div>` : "") +
     `<div class="mk tech">${code(o.id)} · ${T("priority")} ${o.pr}</div>${mks.join("") || `<div class="mk">${T("noMarker")}</div>`}</div>`;
 }
 
 function show(q) {
   current = q;
   document.querySelectorAll("#list li[data-id]").forEach((li) => li.classList.toggle("on", li.dataset.id === q.id));
-  const en = ui === "ko" && plain(q.t[1]) && plain(q.t[1]) !== qTitle(q) ? plain(q.t[1]) : "";
   const kids = quests.filter((x) => x.p === q.id);
   const chips = [`<span class="chip cat">${esc(catName(q.c))}</span>`]
     .concat(q.ac.map((a) => `<span class="chip">${esc(actName(a))}</span>`))
@@ -243,12 +241,11 @@ function show(q) {
     [T("tmpl"), q.rtd.map((r) => `${esc(r.n)} <span class="tech">${code(r.g)}</span>${r.l ? " @ " + esc(r.l) : ""}`).join("<br>")],
   ].filter((r) => r[1]);
   $("detail").innerHTML =
-    `<h2 class="title">${esc(qTitle(q)) || T("noTitle")}</h2>` + (en ? `<p class="title-en">${esc(en)}</p>` : "") +
+    `<h2 class="title">${esc(qTitle(q)) || T("noTitle")}</h2>` +
     `<div class="chips">${chips.join("")}</div>` +
     `<div class="toggle marks">${[["done", "markDone"], ["hide", "markHide"]].map(([k, l]) =>
       `<button type="button" data-qmark="${k}" class="${k}${marks[q.id] === k ? " on" : ""}">${T(l)}</button>`).join("")}</div>` +
     dl(rel) +
-    (ui === "ko" ? `<div class="toggle"><button type="button" id="en-toggle" class="${withEn ? "on" : ""}">${T("showEn")}</button></div>` : "") +
     (rewards.length ? `<section><h3>${T("rewards")}</h3>${dl(rewards)}</section>` : "") +
     `<section><h3>${T("steps")} (${q.steps.length}) <span class="prog">${esc((({ done, total, hid }) => T("stepSum", done, total, hid))(stepCount(q)))}</span></h3>` +
     `<div class="toggle"><button type="button" data-sv="doneOnly" class="${doneOnly ? "on" : ""}">${T(doneOnly ? "allSteps" : "doneOnly")}</button>` +
@@ -274,8 +271,6 @@ function show(q) {
     try { localStorage.setItem(k, (k === "doneOnly" ? doneOnly : hidSteps) ? "1" : "0"); } catch (e) { /* storage blocked */ }
     show(q);
   }));
-  const tg = $("en-toggle");
-  if (tg) tg.onclick = () => { withEn = !withEn; show(q); };
   $("detail").querySelectorAll("[data-obj]").forEach((a) => (a.onclick = (e) => {
     e.preventDefault();
     const el = document.getElementById("obj-" + a.dataset.obj);
@@ -394,7 +389,7 @@ document.querySelectorAll("[data-ui]").forEach((b) => (b.onclick = () => {
 }));
 $("q").oninput = () => { apply(); if (current) show(current); };
 FILTERS.forEach((id) => ($(id).onchange = apply));
-$("reset").onclick = () => { $("q").value = ""; FILTERS.forEach((id) => ($(id).value = "")); apply(); if (current) show(current); };
+$("reset").onclick = () => { $("q").value = ""; FILTERS.forEach((id) => ($(id).value = FILTER_DEFAULT[id] || "")); apply(); if (current) show(current); };
 $("export").onclick = exportMarks;
 $("export-md").onclick = exportMd;
 $("reset-marks").onclick = resetMarks;
