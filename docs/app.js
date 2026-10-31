@@ -105,11 +105,14 @@ function haystack(q) {
   return parts.join("\n").toLowerCase();
 }
 
-// categories and quests follow SortingPriority ascending, then name in the UI language
+// categories in a fixed order; any category not listed goes last, by name
+const CAT_ORDER = ["MainQuest", "PersonalStory", "Tutorial", "Act1_HiddenBoosters", "Crashside", "Grove", "Underdark", "Creche",
+  "Act2_HiddenBoosters", "Shadowcurse", "Act3_HiddenBoosters", "BaldursGate", "Companions", "CompletedQuests"];
+const catRank = (c) => (CAT_ORDER.includes(c) ? CAT_ORDER.indexOf(c) : CAT_ORDER.length);
 function catOrder(a, b) {
-  const ca = data.categories[a] || { sort: -1 }, cb = data.categories[b] || { sort: -1 };
-  return ca.sort - cb.sort || catName(a).localeCompare(catName(b), ui);
+  return catRank(a) - catRank(b) || catName(a).localeCompare(catName(b), ui);
 }
+// quests in a category follow SortingPriority ascending, then name in the UI language
 function questOrder(a, b) {
   return catOrder(a.c, b.c) || a.sort - b.sort || qTitle(a).localeCompare(qTitle(b), ui);
 }

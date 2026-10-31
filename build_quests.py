@@ -128,6 +128,15 @@ for n in ET.parse(JOURNAL + "/questcategory_prototypes.lsx").getroot().iter("nod
         a = attrs(n)
         categories[a["CategoryID"]] = {"t": text(a.get("Description")), "sort": int(a.get("SortingPriority") or 0)}
 
+# the hidden booster categories have no name in English and only Act 3 has one in Korean (제3장); fill the gaps in that pattern
+for i in (1, 2, 3):
+    t = categories.get(f"Act{i}_HiddenBoosters", {}).get("t")
+    if t:
+        if not t[0]:
+            t[0] = f"제{i}장"
+        if not t[1] or t[1].startswith("%%%"):
+            t[1] = f"Chapter {i}"
+
 quests = []
 for n in ET.parse(JOURNAL + "/quest_prototypes.lsx").getroot().iter("node"):
     if n.get("id") != "Quest":
