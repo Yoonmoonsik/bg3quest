@@ -29,7 +29,7 @@ h1 { margin: 0; font-size: 24px; color: var(--accent); letter-spacing: .02em; }
 .filters input, .filters select, .filters button { width: 100%; padding: 7px 9px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 14px; }
 .filters label { display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
 .filters button { cursor: pointer; }
-.mark-tools { display: flex; gap: 8px; }
+.mark-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 #list li.done .t::before { content: "✔ "; color: #6aa84f; }
 #list li.done .t { color: var(--muted); }
 .step .hd .marks { margin: 0 0 0 auto; }

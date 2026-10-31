@@ -16,7 +16,7 @@ const I18N = {
     priority: "우선순위", techShow: "기술 정보 표시", techHide: "기술 정보 숨기기", help: "도움말", markers: "마커", noMarker: "마커 정보 없음", target: "대상", radius: "반경",
     "f-st": "진행", done: "완료", unmarked: "표시 안 함", markDone: "퀘스트 완료", stepDone: "단계 완료", stepHide: "단계 숨기기",
     doneOnly: "완료 단계만 보기", allSteps: "모든 단계 보기", showHidSteps: "숨긴 단계 보기", hideHidSteps: "숨긴 단계 숨기기",
-    clearSteps: "단계 완료·숨기기 초기화", clearStepsAsk: (n) => `이 퀘스트의 단계 표시 ${n}개를 지울까요?`, export: "진행 내보내기", resetMarks: "진행 초기화", import: "진행 불러오기", importBad: "진행 파일을 읽을 수 없습니다.",
+    clearSteps: "단계 완료·숨기기 초기화", clearStepsAsk: (n) => `이 퀘스트의 단계 표시 ${n}개를 지울까요?`, export: "진행 내보내기", exportMd: "마크다운 내보내기", mdTitle: "BG3 퀘스트 진행", mdHidden: "숨김", resetMarks: "진행 초기화", import: "진행 불러오기", importBad: "진행 파일을 읽을 수 없습니다.",
     importAsk: (n) => `${n}개 표시를 불러옵니다. 지금 표시는 모두 바뀝니다. 계속할까요?`, resetAsk: (n) => `완료·숨김 표시 ${n}개를 모두 지울까요?`,
     footer: "데이터: 바닐라 게임 파일(Story/Journal의 quest·objective·questcategory 프로토타입과 Markers, Levelmaps의 경험치·골드 표)에서 추출. 막은 목표 마커의 레벨로 분류했습니다.",
   },
@@ -36,7 +36,7 @@ const I18N = {
     priority: "Priority", techShow: "Show technical info", techHide: "Hide technical info", help: "Help", markers: "Markers", noMarker: "No marker data", target: "Target", radius: "Radius",
     "f-st": "Progress", done: "Completed", unmarked: "Unmarked", markDone: "Complete quest", stepDone: "Complete step", stepHide: "Hide step",
     doneOnly: "Show completed steps only", allSteps: "Show all steps", showHidSteps: "Show hidden steps", hideHidSteps: "Hide hidden steps",
-    clearSteps: "Clear step marks", clearStepsAsk: (n) => `Clear ${n} step marks in this quest?`, export: "Export progress", resetMarks: "Reset progress", import: "Import progress", importBad: "Could not read the progress file.",
+    clearSteps: "Clear step marks", clearStepsAsk: (n) => `Clear ${n} step marks in this quest?`, export: "Export progress", exportMd: "Export Markdown", mdTitle: "BG3 quest progress", mdHidden: "hidden", resetMarks: "Reset progress", import: "Import progress", importBad: "Could not read the progress file.",
     importAsk: (n) => `Import ${n} marks? This replaces all current marks.`, resetAsk: (n) => `Clear all ${n} completed/hidden marks?`,
     footer: "Data extracted from the vanilla game files (Story/Journal quest, objective and category prototypes and Markers; Levelmaps XP and gold tables). Acts come from the levels of objective markers.",
   },
@@ -260,14 +260,35 @@ function toggleDone(q) {
   show(q);
 }
 
-function exportMarks() {
-  const out = Object.entries(marks).map(([id, st]) => ({ id, status: st, title: byId[id.split("::")[0]] ? qTitle(byId[id.split("::")[0]]) : "" }));
-  const blob = new Blob([JSON.stringify({ exported: new Date().toISOString(), marks: out }, null, 2)], { type: "application/json" });
+function download(text, type, name) {
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "bg3quest-progress.json";
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function exportMarks() {
+  const out = Object.entries(marks).map(([id, st]) => ({ id, status: st, title: byId[id.split("::")[0]] ? qTitle(byId[id.split("::")[0]]) : "" }));
+  download(JSON.stringify({ exported: new Date().toISOString(), marks: out }, null, 2), "application/json", "bg3quest-progress.json");
+}
+
+// every quest with a quest or step mark, grouped by category; steps as a checklist, hidden steps struck through
+function exportMd() {
+  const ids = new Set(Object.keys(marks).map((k) => k.split("::")[0]).filter((id) => byId[id]));
+  const qs = [...ids].map((id) => byId[id]).sort((a, b) => catOrder(a.c, b.c) || qTitle(a).localeCompare(qTitle(b), ui));
+  const one = (t) => t.replace(/\s*\n+\s*/g, " ").trim();
+  const lines = [`# ${T("mdTitle")}`, "", new Date().toLocaleString(ui)];
+  let last = null;
+  qs.forEach((q) => {
+    if (q.c !== last) { lines.push("", `## ${catName(q.c)}`); last = q.c; }
+    lines.push("", `### ${marks[q.id] === "done" ? "✔ " : ""}${qTitle(q)}`, "");
+    q.steps.forEach((st, i) => {
+      const m = marks[q.id + "::" + st.id], text = one(tx(st.d)) || T("none");
+      lines.push(m === "hide" ? `- [ ] ~~${i + 1}. ${text}~~ (${T("mdHidden")})` : `- [${m === "done" ? "x" : " "}] ${i + 1}. ${text}`);
+    });
+  });
+  download(lines.join("\n") + "\n", "text/markdown", "bg3quest-progress.md");
 }
 
 // reads a file made by exportMarks and replaces the current marks
@@ -334,6 +355,7 @@ $("q").oninput = () => { apply(); if (current) show(current); };
 FILTERS.forEach((id) => ($(id).onchange = apply));
 $("reset").onclick = () => { $("q").value = ""; FILTERS.forEach((id) => ($(id).value = "")); apply(); if (current) show(current); };
 $("export").onclick = exportMarks;
+$("export-md").onclick = exportMd;
 $("reset-marks").onclick = resetMarks;
 $("import").onclick = () => $("import-file").click();
 $("import-file").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) importMarks(f); };
