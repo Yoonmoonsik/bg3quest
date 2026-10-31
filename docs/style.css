@@ -33,6 +33,11 @@ h1 { margin: 0; font-size: 24px; color: var(--accent); letter-spacing: .02em; }
 #list li.done .t::before { content: "✔ "; color: #6aa84f; }
 #list li.fail .t::before { content: "✘ "; color: #cc5a4a; }
 #list li.done .t, #list li.fail .t { color: var(--muted); }
+.step .hd .marks { margin: 0 0 0 auto; }
+.step .hd .marks button { padding: 0 8px; font-size: 12px; }
+.step.done { border-color: #6aa84f; }
+.step.fail { border-color: #cc5a4a; }
+.step.done .txt, .step.fail .txt { color: var(--muted); }
 .marks button.done.on { border-color: #6aa84f; color: #6aa84f; }
 .marks button.fail.on { border-color: #cc5a4a; color: #cc5a4a; }
 .count { margin: 2px 0; font-size: 13px; color: var(--muted); }
@@ -40,6 +45,10 @@ h1 { margin: 0; font-size: 24px; color: var(--accent); letter-spacing: .02em; }
 #list li { padding: 8px 6px; border-bottom: 1px solid var(--line); cursor: pointer; }
 #list li:hover, #list li.on { background: var(--chip); }
 #list li.grp { cursor: default; background: none; color: var(--accent); font-size: 12px; padding: 10px 6px 4px; }
+#list li.grp { cursor: pointer; user-select: none; }
+#list li.grp::before { content: "▾ "; }
+#list li.grp.shut::before { content: "▸ "; }
+#list li.grp span { color: var(--muted); }
 #list .t { display: block; }
 #list .m { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 main { padding: 16px 24px 40px; min-width: 0; }

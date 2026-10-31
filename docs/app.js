@@ -46,9 +46,12 @@ let ui = pickUi();
 // technical rows (IDs, GUIDs, dev comments) start hidden; the choice lives only in this browser
 let tech = false;
 try { tech = localStorage.getItem("tech") === "1"; } catch (e) { /* storage blocked */ }
-// completed/failed marks per quest ID ("done" | "fail"), saved in this browser
+// completed/failed marks ("done" | "fail") per quest ID, and per step as "questID::stepID", saved in this browser
 let marks = {};
 try { marks = JSON.parse(localStorage.getItem("marks")) || {}; } catch (e) { /* storage blocked or bad JSON */ }
+// collapsed category groups in the list, saved in this browser
+let folded = new Set();
+try { folded = new Set(JSON.parse(localStorage.getItem("folded")) || []); } catch (e) { /* storage blocked or bad JSON */ }
 function saveMarks() {
   try { localStorage.setItem("marks", JSON.stringify(marks)); } catch (e) { /* storage blocked */ }
 }
@@ -120,9 +123,16 @@ function apply() {
     (!f["f-rw"] || REWARD[f["f-rw"]](x)) && (!f["f-st"] || (marks[x.id] || "none") === f["f-st"]));
   $("count").textContent = T("shown", shown.length);
   shown.sort((a, b) => catOrder(a.c, b.c) || qTitle(a).localeCompare(qTitle(b), ui));
+  const per = {};
+  shown.forEach((x) => (per[x.c] = (per[x.c] || 0) + 1));
   let html = "", last = null;
   shown.forEach((x) => {
-    if (x.c !== last) { html += `<li class="grp">${esc(catName(x.c))}</li>`; last = x.c; }
+    const shut = folded.has(x.c);
+    if (x.c !== last) {
+      html += `<li class="grp${shut ? " shut" : ""}" data-grp="${esc(x.c)}">${esc(catName(x.c))} <span>(${per[x.c]})</span></li>`;
+      last = x.c;
+    }
+    if (shut) return;
     const meta = [...(tech ? [x.id] : []), x.steps.length + " " + T("steps")].concat(x.vis ? [] : [T("hiddenQ")]).join(" · ");
     const cls = [current && current.id === x.id ? "on" : "", marks[x.id] || ""].join(" ").trim();
     html += `<li data-id="${esc(x.id)}" class="${cls}">` +
@@ -155,7 +165,11 @@ function stepHtml(s, i) {
     [T("lo"), s.lo ?? ""], [T("rep"), s.rep ?? ""], [T("rc"), s.rc ?? ""], [T("rl"), s.rl ?? ""], [T("ud"), s.ud ?? "", 1],
     [T("flag"), s.fl ? code(s.fl) : "", 1], [T("stg"), s.stg ? code(s.stg) : "", 1], [T("guid"), code(s.g), 1],
   ];
-  return `<div class="step" id="step-${i}"><div class="hd"><b>${i + 1}</b><span class="tech">${code(s.id)}</span></div>` +
+  const key = current.id + "::" + s.id, m = marks[key] || "";
+  const btns = [["done", "done"], ["fail", "failed"]].map(([k, l]) =>
+    `<button type="button" data-smark="${esc(s.id)}" data-k="${k}" class="${k}${m === k ? " on" : ""}">${T(l)}</button>`).join("");
+  return `<div class="step${m ? " " + m : ""}" id="step-${i}"><div class="hd"><b>${i + 1}</b><span class="tech">${code(s.id)}</span>` +
+    `<span class="toggle marks">${btns}</span></div>` +
     `<div class="txt">${mark(tx(s.d)) || `<span class="empty">${T("none")}</span>`}</div>` +
     (alt ? `<div class="alt">${mark(alt)}</div>` : "") +
     (s.dev ? `<div class="dev tech">${T("dev")}: ${mark(s.dev)}</div>` : "") + dl(rows) + `</div>`;
@@ -204,6 +218,13 @@ function show(q) {
     `<section class="tech"><h3>${T("data")}</h3>${dl([["QuestID", code(q.id)], ["CategoryID", code(q.c)], [T("guid"), code(q.g)],
       [T("handle"), code(q.t[2])], [T("sort"), q.sort], [T("rewardTarget"), q.rwt]])}</section>`;
   $("detail").querySelectorAll("[data-mark]").forEach((b) => (b.onclick = () => setMark(q, b.dataset.mark)));
+  $("detail").querySelectorAll("[data-smark]").forEach((b) => (b.onclick = () => {
+    const key = q.id + "::" + b.dataset.smark;
+    if (marks[key] === b.dataset.k) delete marks[key];
+    else marks[key] = b.dataset.k;
+    saveMarks();
+    show(q);
+  }));
   const tg = $("en-toggle");
   if (tg) tg.onclick = () => { withEn = !withEn; show(q); };
   $("detail").querySelectorAll("[data-obj]").forEach((a) => (a.onclick = (e) => {
@@ -224,7 +245,7 @@ function setMark(q, k) {
 }
 
 function exportMarks() {
-  const out = Object.entries(marks).map(([id, st]) => ({ id, status: st, title: byId[id] ? qTitle(byId[id]) : "" }));
+  const out = Object.entries(marks).map(([id, st]) => ({ id, status: st, title: byId[id.split("::")[0]] ? qTitle(byId[id.split("::")[0]]) : "" }));
   const blob = new Blob([JSON.stringify({ exported: new Date().toISOString(), marks: out }, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -293,6 +314,13 @@ $("reset-marks").onclick = resetMarks;
 $("import").onclick = () => $("import-file").click();
 $("import-file").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) importMarks(f); };
 $("list").onclick = (e) => {
+  const g = e.target.closest("li[data-grp]");
+  if (g) {
+    folded.has(g.dataset.grp) ? folded.delete(g.dataset.grp) : folded.add(g.dataset.grp);
+    try { localStorage.setItem("folded", JSON.stringify([...folded])); } catch (e2) { /* storage blocked */ }
+    apply();
+    return;
+  }
   const li = e.target.closest("li[data-id]");
   if (li) location.hash = encodeURIComponent(li.dataset.id);
 };
