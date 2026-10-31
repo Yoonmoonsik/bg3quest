@@ -33,8 +33,8 @@ h1 { margin: 0; font-size: 24px; color: var(--accent); letter-spacing: .02em; }
 .filters label { display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
 .filters button { cursor: pointer; }
 .mark-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.mark-tools [hidden] { display: none; }
-#restore { grid-column: 1 / -1; }
+.io-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.io-tools [hidden] { display: none; }
 #list li.done .t::before { content: "✔ "; color: #6aa84f; }
 #list li.done .t, #list li.hide .t { color: var(--muted); }
 #list li.hide .t::before { content: "⊘ "; }
