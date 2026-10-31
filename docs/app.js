@@ -14,9 +14,9 @@ const I18N = {
     titleOverride: "제목 덮어쓰기", tables: "보상 테이블", optTables: "선택 보상 테이블", tmpl: "보상 템플릿 설명",
     rewardTarget: "보상 대상(QuestRewardTarget)", sort: "정렬 우선순위", guid: "GUID", handle: "제목 핸들",
     priority: "우선순위", techShow: "기술 정보 표시", techHide: "기술 정보 숨기기", help: "도움말", markers: "마커", noMarker: "마커 정보 없음", target: "대상", radius: "반경",
-    "f-st": "진행", done: "완료", hid: "숨김", unmarked: "표시 안 함", markDone: "퀘스트 완료", markHide: "퀘스트 숨기기", stepDone: "단계 완료", stepHide: "단계 숨기기",
-    showHid: "숨긴 퀘스트 보기", hideHid: "숨긴 퀘스트 숨기기",
-    clearMark: "퀘스트 표시 초기화", export: "진행 내보내기", resetMarks: "진행 초기화", import: "진행 불러오기", importBad: "진행 파일을 읽을 수 없습니다.",
+    "f-st": "진행", done: "완료", unmarked: "표시 안 함", markDone: "퀘스트 완료", stepDone: "단계 완료", stepHide: "단계 숨기기",
+    doneOnly: "완료 단계만 보기", allSteps: "모든 단계 보기", showHidSteps: "숨긴 단계 보기", hideHidSteps: "숨긴 단계 숨기기",
+    clearSteps: "단계 완료·숨기기 초기화", clearStepsAsk: (n) => `이 퀘스트의 단계 표시 ${n}개를 지울까요?`, export: "진행 내보내기", resetMarks: "진행 초기화", import: "진행 불러오기", importBad: "진행 파일을 읽을 수 없습니다.",
     importAsk: (n) => `${n}개 표시를 불러옵니다. 지금 표시는 모두 바뀝니다. 계속할까요?`, resetAsk: (n) => `완료·숨김 표시 ${n}개를 모두 지울까요?`,
     footer: "데이터: 바닐라 게임 파일(Story/Journal의 quest·objective·questcategory 프로토타입과 Markers, Levelmaps의 경험치·골드 표)에서 추출. 막은 목표 마커의 레벨로 분류했습니다.",
   },
@@ -34,9 +34,9 @@ const I18N = {
     titleOverride: "Title override", tables: "Reward tables", optTables: "Optional reward tables", tmpl: "Reward template descriptions",
     rewardTarget: "QuestRewardTarget", sort: "Sorting priority", guid: "GUID", handle: "Title handle",
     priority: "Priority", techShow: "Show technical info", techHide: "Hide technical info", help: "Help", markers: "Markers", noMarker: "No marker data", target: "Target", radius: "Radius",
-    "f-st": "Progress", done: "Completed", hid: "Hidden", unmarked: "Unmarked", markDone: "Complete quest", markHide: "Hide quest", stepDone: "Complete step", stepHide: "Hide step",
-    showHid: "Show hidden quests", hideHid: "Hide hidden quests",
-    clearMark: "Clear quest mark", export: "Export progress", resetMarks: "Reset progress", import: "Import progress", importBad: "Could not read the progress file.",
+    "f-st": "Progress", done: "Completed", unmarked: "Unmarked", markDone: "Complete quest", stepDone: "Complete step", stepHide: "Hide step",
+    doneOnly: "Show completed steps only", allSteps: "Show all steps", showHidSteps: "Show hidden steps", hideHidSteps: "Hide hidden steps",
+    clearSteps: "Clear step marks", clearStepsAsk: (n) => `Clear ${n} step marks in this quest?`, export: "Export progress", resetMarks: "Reset progress", import: "Import progress", importBad: "Could not read the progress file.",
     importAsk: (n) => `Import ${n} marks? This replaces all current marks.`, resetAsk: (n) => `Clear all ${n} completed/hidden marks?`,
     footer: "Data extracted from the vanilla game files (Story/Journal quest, objective and category prototypes and Markers; Levelmaps XP and gold tables). Acts come from the levels of objective markers.",
   },
@@ -48,15 +48,13 @@ let ui = pickUi();
 // technical rows (IDs, GUIDs, dev comments) start hidden; the choice lives only in this browser
 let tech = false;
 try { tech = localStorage.getItem("tech") === "1"; } catch (e) { /* storage blocked */ }
-// completed/hidden marks ("done" | "hide") per quest ID, and per step as "questID::stepID", saved in this browser.
-// "hide" is for quests and steps a playthrough's branch never reaches.
+// marks saved in this browser: "done" per quest ID, and "done" | "hide" per step as "questID::stepID".
+// "hide" is for steps a playthrough's branch never reaches.
 let marks = {};
 try { marks = JSON.parse(localStorage.getItem("marks")) || {}; } catch (e) { /* storage blocked or bad JSON */ }
-const isMark = (st) => st === "done" || st === "hide";
-marks = Object.fromEntries(Object.entries(marks).filter((e) => isMark(e[1])));
-// hidden quests and steps stay out of view until this is on
-let showHid = false;
-try { showHid = localStorage.getItem("showHid") === "1"; } catch (e) { /* storage blocked */ }
+// step view toggles: hidden steps stay out of view until hidSteps is on; doneOnly shows only completed steps
+let hidSteps = false, doneOnly = false;
+try { hidSteps = localStorage.getItem("hidSteps") === "1"; doneOnly = localStorage.getItem("doneOnly") === "1"; } catch (e) { /* storage blocked */ }
 // category groups start collapsed; the ones opened are saved in this browser
 let opened = new Set();
 try { opened = new Set(JSON.parse(localStorage.getItem("opened")) || []); } catch (e) { /* storage blocked or bad JSON */ }
@@ -110,10 +108,10 @@ function fillFilters() {
     .map((k) => opt(k, actName(acts[k][0]), acts[k][1])).join("");
   $("f-v").innerHTML = all + opt("1", T("visible")) + opt("0", T("hidden"));
   $("f-rw").innerHTML = all + ["xp", "table", "gold", "ach"].map((k) => opt(k, T("has" + k[0].toUpperCase() + k.slice(1)))).join("");
-  const st = { done: 0, hide: 0 };
+  const st = { done: 0 };
   quests.forEach((q) => marks[q.id] && st[marks[q.id]]++);
-  $("f-st").innerHTML = all + opt("done", T("done"), st.done) + opt("hide", T("hid"), st.hide) +
-    opt("none", T("unmarked"), quests.length - st.done - st.hide);
+  $("f-st").innerHTML = all + opt("done", T("done"), st.done) +
+    opt("none", T("unmarked"), quests.length - st.done);
   FILTERS.forEach((id, i) => ($(id).value = keep[i]));
 }
 
@@ -128,8 +126,7 @@ function apply() {
   const f = Object.fromEntries(FILTERS.map((id) => [id, $(id).value]));
   const shown = quests.filter((x) => (!q || x._h.includes(q)) && (!f["f-c"] || x.c === f["f-c"]) &&
     (!f["f-ac"] || x.ac.some((a) => a[0] === f["f-ac"])) && (!f["f-v"] || x.vis === (f["f-v"] === "1")) &&
-    (!f["f-rw"] || REWARD[f["f-rw"]](x)) && (!f["f-st"] || (marks[x.id] || "none") === f["f-st"]) &&
-    (showHid || f["f-st"] === "hide" || marks[x.id] !== "hide"));
+    (!f["f-rw"] || REWARD[f["f-rw"]](x)) && (!f["f-st"] || (marks[x.id] || "none") === f["f-st"]));
   $("count").textContent = T("shown", shown.length);
   shown.sort((a, b) => catOrder(a.c, b.c) || qTitle(a).localeCompare(qTitle(b), ui));
   const per = {};
@@ -175,7 +172,7 @@ function stepHtml(s, i) {
     [T("flag"), s.fl ? code(s.fl) : "", 1], [T("stg"), s.stg ? code(s.stg) : "", 1], [T("guid"), code(s.g), 1],
   ];
   const key = current.id + "::" + s.id, m = marks[key] || "";
-  if (m === "hide" && !showHid) return "";
+  if ((m === "hide" && !hidSteps) || (doneOnly && m !== "done")) return "";
   const btns = [["done", "stepDone"], ["hide", "stepHide"]].map(([k, l]) =>
     `<button type="button" data-smark="${esc(s.id)}" data-k="${k}" class="${k}${m === k ? " on" : ""}">${T(l)}</button>`).join("");
   return `<div class="step${m ? " " + m : ""}" id="step-${i}"><div class="hd"><b>${i + 1}</b><span class="tech">${code(s.id)}</span>` +
@@ -218,21 +215,31 @@ function show(q) {
   $("detail").innerHTML =
     `<h2 class="title">${esc(qTitle(q)) || T("noTitle")}</h2>` + (en ? `<p class="title-en">${esc(en)}</p>` : "") +
     `<div class="chips">${chips.join("")}</div>` +
-    `<div class="toggle marks">${[["done", "markDone"], ["hide", "markHide"]].map(([k, l]) =>
-      `<button type="button" data-mark="${k}" class="${k}${marks[q.id] === k ? " on" : ""}">${T(l)}</button>`).join("")}` +
-    (marks[q.id] ? `<button type="button" data-mark="">${T("clearMark")}</button>` : "") + `</div>` + dl(rel) +
+    `<div class="toggle marks"><button type="button" id="quest-done" class="done${marks[q.id] === "done" ? " on" : ""}">${T("markDone")}</button></div>` +
+    dl(rel) +
     (ui === "ko" ? `<div class="toggle"><button type="button" id="en-toggle" class="${withEn ? "on" : ""}">${T("showEn")}</button></div>` : "") +
     (rewards.length ? `<section><h3>${T("rewards")}</h3>${dl(rewards)}</section>` : "") +
-    `<section><h3>${T("steps")} (${q.steps.length})</h3>${q.steps.map(stepHtml).join("")}</section>` +
+    `<section><h3>${T("steps")} (${q.steps.length})</h3>` +
+    `<div class="toggle"><button type="button" data-sv="doneOnly" class="${doneOnly ? "on" : ""}">${T(doneOnly ? "allSteps" : "doneOnly")}</button>` +
+    `<button type="button" data-sv="hidSteps" class="${hidSteps ? "on" : ""}">${T(hidSteps ? "hideHidSteps" : "showHidSteps")}</button>` +
+    `<button type="button" id="clear-steps">${T("clearSteps")}</button></div>` +
+    `${q.steps.map(stepHtml).join("")}</section>` +
     `<section><h3>${T("objectives")} (${q.obs.length})</h3>${q.obs.map(objHtml).join("")}</section>` +
     `<section class="tech"><h3>${T("data")}</h3>${dl([["QuestID", code(q.id)], ["CategoryID", code(q.c)], [T("guid"), code(q.g)],
       [T("handle"), code(q.t[2])], [T("sort"), q.sort], [T("rewardTarget"), q.rwt]])}</section>`;
-  $("detail").querySelectorAll("[data-mark]").forEach((b) => (b.onclick = () => setMark(q, b.dataset.mark)));
+  $("quest-done").onclick = () => toggleDone(q);
+  $("clear-steps").onclick = () => clearSteps(q);
   $("detail").querySelectorAll("[data-smark]").forEach((b) => (b.onclick = () => {
     const key = q.id + "::" + b.dataset.smark;
     if (marks[key] === b.dataset.k) delete marks[key];
     else marks[key] = b.dataset.k;
     saveMarks();
+    show(q);
+  }));
+  $("detail").querySelectorAll("[data-sv]").forEach((b) => (b.onclick = () => {
+    const k = b.dataset.sv;
+    if (k === "doneOnly") doneOnly = !doneOnly; else hidSteps = !hidSteps;
+    try { localStorage.setItem(k, (k === "doneOnly" ? doneOnly : hidSteps) ? "1" : "0"); } catch (e) { /* storage blocked */ }
     show(q);
   }));
   const tg = $("en-toggle");
@@ -244,10 +251,9 @@ function show(q) {
   }));
 }
 
-// clicking the active mark again clears it
-function setMark(q, k) {
-  if (!k || marks[q.id] === k) delete marks[q.id];
-  else marks[q.id] = k;
+function toggleDone(q) {
+  if (marks[q.id]) delete marks[q.id];
+  else marks[q.id] = "done";
   saveMarks();
   fillFilters();
   apply();
@@ -270,7 +276,7 @@ function importMarks(file) {
     const list = JSON.parse(txt).marks;
     if (!Array.isArray(list)) throw new Error("no marks");
     const next = {};
-    list.forEach((m) => { if (m && typeof m.id === "string" && isMark(m.status)) next[m.id] = m.status; });
+    list.forEach((m) => { if (m && typeof m.id === "string" && (m.status === "done" || m.status === "hide")) next[m.id] = m.status; });
     if (!confirm(T("importAsk", Object.keys(next).length))) return;
     marks = next;
     saveMarks();
@@ -278,6 +284,14 @@ function importMarks(file) {
     apply();
     if (current) show(current);
   }).catch(() => alert(T("importBad")));
+}
+
+function clearSteps(q) {
+  const keys = Object.keys(marks).filter((k) => k.startsWith(q.id + "::"));
+  if (!keys.length || !confirm(T("clearStepsAsk", keys.length))) return;
+  keys.forEach((k) => delete marks[k]);
+  saveMarks();
+  show(q);
 }
 
 function resetMarks() {
@@ -302,7 +316,6 @@ function applyUi() {
   document.querySelectorAll("[data-i18n]").forEach((el) => (el.textContent = T(el.dataset.i18n)));
   document.querySelectorAll("[data-ui]").forEach((b) => b.classList.toggle("on", b.dataset.ui === ui));
   showTech();
-  showHidBtn();
   $("help").href = "help.html?lang=" + ui;
   $("q").placeholder = T("q");
   if (!data) return;
@@ -322,18 +335,6 @@ FILTERS.forEach((id) => ($(id).onchange = apply));
 $("reset").onclick = () => { $("q").value = ""; FILTERS.forEach((id) => ($(id).value = "")); apply(); if (current) show(current); };
 $("export").onclick = exportMarks;
 $("reset-marks").onclick = resetMarks;
-function showHidBtn() {
-  $("show-hid").classList.toggle("on", showHid);
-  $("show-hid").textContent = T(showHid ? "hideHid" : "showHid");
-}
-$("show-hid").onclick = () => {
-  showHid = !showHid;
-  try { localStorage.setItem("showHid", showHid ? "1" : "0"); } catch (e) { /* storage blocked */ }
-  showHidBtn();
-  if (!data) return;
-  apply();
-  if (current) show(current);
-};
 $("import").onclick = () => $("import-file").click();
 $("import-file").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) importMarks(f); };
 $("list").onclick = (e) => {
