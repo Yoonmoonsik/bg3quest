@@ -15,7 +15,7 @@ const I18N = {
     rewardTarget: "보상 대상(QuestRewardTarget)", sort: "정렬 우선순위", guid: "GUID", handle: "제목 핸들",
     priority: "우선순위", techShow: "기술 정보 표시", techHide: "기술 정보 숨기기", help: "도움말", markers: "마커", noMarker: "마커 정보 없음", target: "대상", radius: "반경",
     "f-st": "진행", done: "완료", hid: "숨김", unmarked: "표시 안 함", markDone: "퀘스트 완료", markHide: "퀘스트 숨기기",
-    showHid: "숨긴 퀘스트 보기", hideHid: "숨긴 퀘스트 숨기기", stepDone: "단계 완료", stepHide: "단계 숨기기",
+    showHid: "숨긴 퀘스트 보기", hideHid: "숨긴 퀘스트 숨기기", inProgOn: "진행 중 퀘스트만 보기", inProgOff: "모든 퀘스트 보기", stepDone: "단계 완료", stepHide: "단계 숨기기",
     doneOnly: "완료 단계만 보기", allSteps: "모든 단계 보기", showHidSteps: "숨긴 단계 보기", hideHidSteps: "숨긴 단계 숨기기",
     stepProg: (d, n) => `${d}/${n} 단계`, catProg: (d, n) => `${d}/${n} 퀘스트`, stepSum: (d, n, h) => `완료 ${d}/${n}` + (h ? ` · 숨김 ${h}` : ""),
     clearSteps: "단계 완료·숨기기 초기화", clearStepsAsk: (n) => `이 퀘스트의 단계 표시 ${n}개를 지울까요?`, export: "진행 내보내기", exportMd: "마크다운 내보내기", copyMd: "마크다운 복사", copied: "복사했습니다", copyFail: "복사하지 못했습니다",
@@ -38,7 +38,7 @@ const I18N = {
     rewardTarget: "QuestRewardTarget", sort: "Sorting priority", guid: "GUID", handle: "Title handle",
     priority: "Priority", techShow: "Show technical info", techHide: "Hide technical info", help: "Help", markers: "Markers", noMarker: "No marker data", target: "Target", radius: "Radius",
     "f-st": "Progress", done: "Completed", hid: "Hidden", unmarked: "Unmarked", markDone: "Complete quest", markHide: "Hide quest",
-    showHid: "Show hidden quests", hideHid: "Hide hidden quests", stepDone: "Complete step", stepHide: "Hide step",
+    showHid: "Show hidden quests", hideHid: "Hide hidden quests", inProgOn: "Show quests in progress only", inProgOff: "Show all quests", stepDone: "Complete step", stepHide: "Hide step",
     doneOnly: "Show completed steps only", allSteps: "Show all steps", showHidSteps: "Show hidden steps", hideHidSteps: "Hide hidden steps",
     stepProg: (d, n) => `${d}/${n} steps`, catProg: (d, n) => `${d}/${n} quests`, stepSum: (d, n, h) => `completed ${d}/${n}` + (h ? ` · hidden ${h}` : ""),
     clearSteps: "Clear step marks", clearStepsAsk: (n) => `Clear ${n} step marks in this quest?`, export: "Export progress", exportMd: "Export Markdown", copyMd: "Copy Markdown", copied: "Copied", copyFail: "Could not copy",
@@ -70,6 +70,9 @@ try { opened = new Set(JSON.parse(localStorage.getItem("opened")) || []); } catc
 // hidden quests stay out of the list until this is on
 let showHid = false;
 try { showHid = localStorage.getItem("showHid") === "1"; } catch (e) { /* storage blocked */ }
+// in progress: at least one completed step, and the quest itself neither completed nor hidden
+let inProg = false;
+try { inProg = localStorage.getItem("inProg") === "1"; } catch (e) { /* storage blocked */ }
 function saveOpened() {
   try { localStorage.setItem("opened", JSON.stringify([...opened])); } catch (e) { /* storage blocked */ }
 }
@@ -186,7 +189,8 @@ function apply() {
   base.forEach((x) => marks[x.id] && sum[marks[x.id]]++);
   $("total").textContent = `· ${quests.length.toLocaleString()} ${T("unit")} · ${T("summary", sum.done, sum.hide)}`;
   const shown = base.filter((x) => (!f["f-st"] || (marks[x.id] || "none") === f["f-st"]) &&
-    (showHid || f["f-st"] === "hide" || marks[x.id] !== "hide"));
+    (showHid || f["f-st"] === "hide" || marks[x.id] !== "hide") &&
+    (!inProg || (!marks[x.id] && stepCount(x).done > 0)));
   $("count").textContent = T("shown", shown.length);
   shown.sort(questOrder);
   const per = {}, perDone = {};
@@ -432,6 +436,7 @@ function applyUi() {
   document.querySelectorAll("[data-ui]").forEach((b) => b.classList.toggle("on", b.dataset.ui === ui));
   showTech();
   showHidBtn();
+  inProgBtn();
   $("help").href = "help.html?lang=" + ui;
   $("q").placeholder = T("q");
   if (!data) return;
@@ -462,6 +467,16 @@ $("show-hid").onclick = () => {
   showHid = !showHid;
   try { localStorage.setItem("showHid", showHid ? "1" : "0"); } catch (e) { /* storage blocked */ }
   showHidBtn();
+  if (data) apply();
+};
+function inProgBtn() {
+  $("in-prog").classList.toggle("on", inProg);
+  $("in-prog").textContent = T(inProg ? "inProgOff" : "inProgOn");
+}
+$("in-prog").onclick = () => {
+  inProg = !inProg;
+  try { localStorage.setItem("inProg", inProg ? "1" : "0"); } catch (e) { /* storage blocked */ }
+  inProgBtn();
   if (data) apply();
 };
 $("import").onclick = () => $("import-file").click();

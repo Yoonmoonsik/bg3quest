@@ -1,15 +1,45 @@
-# BG3 퀘스트 일지
+# BG3 Quest Journal
 
-발더스 게이트 3 바닐라 데이터의 일지 퀘스트를 단계·목표·마커·보상까지 조회하는 사이트입니다.
+[한국어](README.ko.md)
 
-- 사이트: https://yoonmoonsik.github.io/bg3quest/
-- `build_quests.py`: 언팩한 게임 데이터(`Story/Journal`의 quest·objective·questcategory 프로토타입과 Markers, `Levelmaps`의 경험치·골드 표)에서 `docs/data/quests.json`을 다시 만듭니다. 번역은 `../bg3dnd/.reference`, 지역 이름은 `../bg3dnd/.docs/data/regions.json`을 씁니다.
+A website for browsing every journal quest in vanilla Baldur's Gate 3, down to its steps, objectives, map markers and rewards, and for tracking your own playthrough.
 
-## 진행 기록
+- Site: https://yoonmoonsik.github.io/bg3quest/
 
-- 퀘스트와 단계의 완료·숨기기 표시(분기 때문에 진행할 수 없는 것은 숨기기), 숨긴 퀘스트 보기·숨기기.
-- 목록에 단계 진행 수(예: 2/21 단계), 분류에 퀘스트 완료 수(예: 5/31 퀘스트). 숨긴 단계와 숨긴 퀘스트는 분모에서 뺍니다.
-- 완료 단계만 보기, 숨긴 단계 보기·숨기기, 퀘스트별 단계 표시 초기화.
-- 진행 내보내기(JSON)·불러오기(불러오기 전 진행 복원), 마크다운 내보내기·복사(숨기지 않은 퀘스트의 완료 표시와 완료한 단계만), 진행 초기화.
-- 단계의 "여기까지 완료", Ctrl+Z 되돌리기, 단축키 T·C·H·J·K.
-- 기록은 브라우저 `localStorage`에만 저장됩니다.
+![Quest view: list with progress counts, quest buttons and steps marked completed](screenshots/en-quest.jpg)
+
+## Browse
+
+- Quests grouped by category (Main Quest, Personal Quests, Prologue, the act regions, Companions), in a fixed category order and by the game's SortingPriority within a category.
+- Search titles, step text and IDs in Korean or English.
+- Filter by category, act, journal visibility, reward type and progress.
+- Each quest shows its steps, objectives with map markers and regions, rewards, and related quests (parent and subquests).
+- Technical info (IDs, GUIDs, dev comments, experience, marker targets) stays hidden until you turn it on.
+- Korean and English interface.
+
+![Objectives with map markers and regions](screenshots/en-objectives.jpg)
+
+## Track your progress
+
+- Mark a quest **completed** or **hidden**, and mark each step completed or hidden. Hide quests and steps your playthrough's branch can never reach.
+- Progress counts: "5/21 steps" in the list, "3/31 quests" on each category and act, and completed/hidden totals in the header. Hidden quests and steps are left out of the totals.
+- **Complete up to here** completes every step up to that one, skipping hidden steps.
+- Show quests in progress only (at least one completed step, quest not yet completed or hidden), show completed steps only, show or hide hidden steps and hidden quests, and clear one quest's step marks.
+- Ctrl+Z undoes the last progress change.
+- Export and import progress as JSON; the progress an import replaces can be restored.
+- Export or copy Markdown: completed quests and completed steps, without hidden quests.
+- Progress is saved only in your browser (`localStorage`).
+
+## Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| T | Show / hide technical info |
+| C | Complete the current quest |
+| H | Hide the current quest |
+| J / K | Next / previous quest in the list |
+| Ctrl+Z | Undo the last progress change |
+
+## Data
+
+`build_quests.py` rebuilds `docs/data/quests.json` from the unpacked game data: the quest, objective and quest category prototypes and Markers in `Story/Journal`, and the experience and gold tables in `Levelmaps`. Translations come from `../bg3dnd/.reference` and region names from `../bg3dnd/.docs/data/regions.json`.
