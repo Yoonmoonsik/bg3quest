@@ -105,9 +105,13 @@ function haystack(q) {
   return parts.join("\n").toLowerCase();
 }
 
+// categories and quests follow SortingPriority ascending, then name in the UI language
 function catOrder(a, b) {
   const ca = data.categories[a] || { sort: -1 }, cb = data.categories[b] || { sort: -1 };
-  return cb.sort - ca.sort || catName(a).localeCompare(catName(b), ui);
+  return ca.sort - cb.sort || catName(a).localeCompare(catName(b), ui);
+}
+function questOrder(a, b) {
+  return catOrder(a.c, b.c) || a.sort - b.sort || qTitle(a).localeCompare(qTitle(b), ui);
 }
 
 function fillFilters() {
@@ -145,7 +149,7 @@ function apply() {
     (!f["f-rw"] || REWARD[f["f-rw"]](x)) && (!f["f-st"] || (marks[x.id] || "none") === f["f-st"]) &&
     (showHid || f["f-st"] === "hide" || marks[x.id] !== "hide"));
   $("count").textContent = T("shown", shown.length);
-  shown.sort((a, b) => catOrder(a.c, b.c) || qTitle(a).localeCompare(qTitle(b), ui));
+  shown.sort(questOrder);
   const per = {}, perDone = {};
   // hidden quests count toward neither side
   shown.forEach((x) => {
@@ -302,7 +306,7 @@ function exportMarks() {
 // every quest with a quest or step mark, grouped by category; steps as a checklist, hidden steps struck through
 function exportMd() {
   const ids = new Set(Object.keys(marks).map((k) => k.split("::")[0]).filter((id) => byId[id]));
-  const qs = [...ids].map((id) => byId[id]).sort((a, b) => catOrder(a.c, b.c) || qTitle(a).localeCompare(qTitle(b), ui));
+  const qs = [...ids].map((id) => byId[id]).sort(questOrder);
   const one = (t) => t.replace(/\s*\n+\s*/g, " ").trim();
   const lines = [`# ${T("mdTitle")}`, "", new Date().toLocaleString(ui)];
   let last = null;
