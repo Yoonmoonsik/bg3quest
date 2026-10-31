@@ -18,7 +18,8 @@ const I18N = {
     showHid: "숨긴 퀘스트 보기", hideHid: "숨긴 퀘스트 숨기기", stepDone: "단계 완료", stepHide: "단계 숨기기",
     doneOnly: "완료 단계만 보기", allSteps: "모든 단계 보기", showHidSteps: "숨긴 단계 보기", hideHidSteps: "숨긴 단계 숨기기",
     stepProg: (d, n) => `${d}/${n} 단계`, catProg: (d, n) => `${d}/${n} 퀘스트`, stepSum: (d, n, h) => `완료 ${d}/${n}` + (h ? ` · 숨김 ${h}` : ""),
-    clearSteps: "단계 완료·숨기기 초기화", clearStepsAsk: (n) => `이 퀘스트의 단계 표시 ${n}개를 지울까요?`, export: "진행 내보내기", exportMd: "마크다운 내보내기", mdTitle: "BG3 퀘스트 진행", resetMarks: "진행 초기화", import: "진행 불러오기", importBad: "진행 파일을 읽을 수 없습니다.",
+    clearSteps: "단계 완료·숨기기 초기화", clearStepsAsk: (n) => `이 퀘스트의 단계 표시 ${n}개를 지울까요?`, export: "진행 내보내기", exportMd: "마크다운 내보내기", copyMd: "마크다운 복사", copied: "복사했습니다", copyFail: "복사하지 못했습니다",
+    restore: "이전 진행 복원", restoreAsk: (n) => `불러오기 전 진행(${n}개 표시)으로 되돌릴까요?`, upTo: "여기까지 완료", mdTitle: "BG3 퀘스트 진행", resetMarks: "진행 초기화", import: "진행 불러오기", importBad: "진행 파일을 읽을 수 없습니다.",
     importAsk: (n) => `${n}개 표시를 불러옵니다. 지금 표시는 모두 바뀝니다. 계속할까요?`, resetAsk: (n) => `완료·숨김 표시 ${n}개를 모두 지울까요?`,
     footer: "데이터: 바닐라 게임 파일(Story/Journal의 quest·objective·questcategory 프로토타입과 Markers, Levelmaps의 경험치·골드 표)에서 추출. 막은 목표 마커의 레벨로 분류했습니다.",
   },
@@ -40,7 +41,8 @@ const I18N = {
     showHid: "Show hidden quests", hideHid: "Hide hidden quests", stepDone: "Complete step", stepHide: "Hide step",
     doneOnly: "Show completed steps only", allSteps: "Show all steps", showHidSteps: "Show hidden steps", hideHidSteps: "Hide hidden steps",
     stepProg: (d, n) => `${d}/${n} steps`, catProg: (d, n) => `${d}/${n} quests`, stepSum: (d, n, h) => `completed ${d}/${n}` + (h ? ` · hidden ${h}` : ""),
-    clearSteps: "Clear step marks", clearStepsAsk: (n) => `Clear ${n} step marks in this quest?`, export: "Export progress", exportMd: "Export Markdown", mdTitle: "BG3 quest progress", resetMarks: "Reset progress", import: "Import progress", importBad: "Could not read the progress file.",
+    clearSteps: "Clear step marks", clearStepsAsk: (n) => `Clear ${n} step marks in this quest?`, export: "Export progress", exportMd: "Export Markdown", copyMd: "Copy Markdown", copied: "Copied", copyFail: "Could not copy",
+    restore: "Restore previous progress", restoreAsk: (n) => `Go back to the progress before the import (${n} marks)?`, upTo: "Complete up to here", mdTitle: "BG3 quest progress", resetMarks: "Reset progress", import: "Import progress", importBad: "Could not read the progress file.",
     importAsk: (n) => `Import ${n} marks? This replaces all current marks.`, resetAsk: (n) => `Clear all ${n} completed/hidden marks?`,
     footer: "Data extracted from the vanilla game files (Story/Journal quest, objective and category prototypes and Markers; Levelmaps XP and gold tables). Acts come from the levels of objective markers.",
   },
@@ -76,6 +78,26 @@ function stepCount(q) {
   let done = 0, hid = 0;
   q.steps.forEach((s) => { const m = marks[q.id + "::" + s.id]; if (m === "done") done++; else if (m === "hide") hid++; });
   return { done, hid, total: q.steps.length - hid };
+}
+// every change to marks goes through change(): it keeps an undo snapshot, saves and redraws
+const undo = [];
+function change(fn) {
+  undo.push(JSON.stringify(marks));
+  if (undo.length > 50) undo.shift();
+  fn();
+  saveMarks();
+  refresh();
+}
+function refresh() {
+  fillFilters();
+  apply();
+  if (current) show(current);
+}
+function undoLast() {
+  if (!undo.length) return;
+  marks = JSON.parse(undo.pop());
+  saveMarks();
+  refresh();
 }
 function saveMarks() {
   try { localStorage.setItem("marks", JSON.stringify(marks)); } catch (e) { /* storage blocked */ }
@@ -141,7 +163,6 @@ function fillFilters() {
   $("f-rw").innerHTML = all + ["xp", "table", "gold", "ach"].map((k) => opt(k, T("has" + k[0].toUpperCase() + k.slice(1)))).join("");
   const st = { done: 0, hide: 0 };
   quests.forEach((q) => marks[q.id] && st[marks[q.id]]++);
-  $("total").textContent = `· ${quests.length.toLocaleString()} ${T("unit")} · ${T("summary", st.done, st.hide)}`;
   $("f-st").innerHTML = all + opt("done", T("done"), st.done) + opt("hide", T("hid"), st.hide) +
     opt("none", T("unmarked"), quests.length - st.done - st.hide);
   FILTERS.forEach((id, i) => ($(id).value = filled ? keep[i] : FILTER_DEFAULT[id] || ""));
@@ -157,9 +178,14 @@ function apply() {
   const raw = $("q").value.trim(), q = raw.toLowerCase();
   hl = raw ? new RegExp(raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi") : null;
   const f = Object.fromEntries(FILTERS.map((id) => [id, $(id).value]));
-  const shown = quests.filter((x) => (!q || x._h.includes(q)) && (!f["f-c"] || x.c === f["f-c"]) &&
+  const base = quests.filter((x) => (!q || x._h.includes(q)) && (!f["f-c"] || x.c === f["f-c"]) &&
     (!f["f-ac"] || x.ac.some((a) => a[0] === f["f-ac"])) && (!f["f-v"] || x.vis === (f["f-v"] === "1")) &&
-    (!f["f-rw"] || REWARD[f["f-rw"]](x)) && (!f["f-st"] || (marks[x.id] || "none") === f["f-st"]) &&
+    (!f["f-rw"] || REWARD[f["f-rw"]](x)));
+  // the header summary counts the quests the other filters leave, before the progress filter and hiding
+  const sum = { done: 0, hide: 0 };
+  base.forEach((x) => marks[x.id] && sum[marks[x.id]]++);
+  $("total").textContent = `· ${quests.length.toLocaleString()} ${T("unit")} · ${T("summary", sum.done, sum.hide)}`;
+  const shown = base.filter((x) => (!f["f-st"] || (marks[x.id] || "none") === f["f-st"]) &&
     (showHid || f["f-st"] === "hide" || marks[x.id] !== "hide"));
   $("count").textContent = T("shown", shown.length);
   shown.sort(questOrder);
@@ -216,7 +242,7 @@ function stepHtml(s, i) {
   const btns = [["done", "stepDone"], ["hide", "stepHide"]].map(([k, l]) =>
     `<button type="button" data-smark="${esc(s.id)}" data-k="${k}" class="${k}${m === k ? " on" : ""}">${T(l)}</button>`).join("");
   return `<div class="step${m ? " " + m : ""}" id="step-${i}"><div class="hd"><b>${i + 1}</b><span class="tech">${code(s.id)}</span>` +
-    `<span class="toggle marks">${btns}</span></div>` +
+    `<span class="toggle marks">${i ? `<button type="button" data-upto="${i}">${T("upTo")}</button>` : ""}${btns}</span></div>` +
     `<div class="txt">${mark(tx(s.d)) || `<span class="empty">${T("none")}</span>`}</div>` +
     (s.dev ? `<div class="dev tech">${T("dev")}: ${mark(s.dev)}</div>` : "") + dl(rows) + `</div>`;
 }
@@ -267,14 +293,18 @@ function show(q) {
       [T("handle"), code(q.t[2])], [T("sort"), q.sort], [T("rewardTarget"), q.rwt]])}</section>`;
   $("detail").querySelectorAll("[data-qmark]").forEach((b) => (b.onclick = () => setQuestMark(q, b.dataset.qmark)));
   $("clear-steps").onclick = () => clearSteps(q);
-  $("detail").querySelectorAll("[data-smark]").forEach((b) => (b.onclick = () => {
+  $("detail").querySelectorAll("[data-smark]").forEach((b) => (b.onclick = () => change(() => {
     const key = q.id + "::" + b.dataset.smark;
     if (marks[key] === b.dataset.k) delete marks[key];
     else marks[key] = b.dataset.k;
-    saveMarks();
-    apply();
-    show(q);
-  }));
+  })));
+  // completes every step up to this one, leaving hidden steps hidden
+  $("detail").querySelectorAll("[data-upto]").forEach((b) => (b.onclick = () => change(() => {
+    q.steps.slice(0, +b.dataset.upto + 1).forEach((st) => {
+      const key = q.id + "::" + st.id;
+      if (marks[key] !== "hide") marks[key] = "done";
+    });
+  })));
   $("detail").querySelectorAll("[data-sv]").forEach((b) => (b.onclick = () => {
     const k = b.dataset.sv;
     if (k === "doneOnly") doneOnly = !doneOnly; else hidSteps = !hidSteps;
@@ -290,12 +320,10 @@ function show(q) {
 
 // clicking the active mark again clears it
 function setQuestMark(q, k) {
-  if (marks[q.id] === k) delete marks[q.id];
-  else marks[q.id] = k;
-  saveMarks();
-  fillFilters();
-  apply();
-  show(q);
+  change(() => {
+    if (marks[q.id] === k) delete marks[q.id];
+    else marks[q.id] = k;
+  });
 }
 
 function download(text, type, name) {
@@ -318,7 +346,7 @@ function exportMarks() {
 }
 
 // every quest with a quest or step mark except hidden quests, grouped by category; only completed steps are listed
-function exportMd() {
+function mdText() {
   const ids = new Set(Object.keys(marks).map((k) => k.split("::")[0]).filter((id) => byId[id] && marks[id] !== "hide"));
   const qs = [...ids].map((id) => byId[id]).sort(questOrder);
   const one = (t) => t.replace(/\s*\n+\s*/g, " ").trim();
@@ -332,7 +360,15 @@ function exportMd() {
       if (m === "done") lines.push(`- [x] ${i + 1}. ${text}`);
     });
   });
-  download(lines.join("\n") + "\n", "text/markdown", `bg3quest-progress-${stamp()}.md`);
+  return lines.join("\n") + "\n";
+}
+function exportMd() {
+  download(mdText(), "text/markdown", `bg3quest-progress-${stamp()}.md`);
+}
+function copyMd() {
+  const b = $("copy-md");
+  const done = (k) => { b.textContent = T(k); setTimeout(() => (b.textContent = T("copyMd")), 1500); };
+  navigator.clipboard.writeText(mdText()).then(() => done("copied"), () => done("copyFail"));
 }
 
 // reads a file made by exportMarks and replaces the current marks
@@ -343,31 +379,37 @@ function importMarks(file) {
     const next = {};
     list.forEach((m) => { if (m && typeof m.id === "string" && (m.status === "done" || m.status === "hide")) next[m.id] = m.status; });
     if (!confirm(T("importAsk", Object.keys(next).length))) return;
-    marks = next;
-    saveMarks();
-    fillFilters();
-    apply();
-    if (current) show(current);
+    // keep the progress being replaced so "Restore previous progress" can bring it back
+    try { localStorage.setItem("marksBackup", JSON.stringify(marks)); } catch (e) { /* storage blocked */ }
+    change(() => (marks = next));
+    showRestore();
   }).catch(() => alert(T("importBad")));
+}
+
+function backup() {
+  try { return JSON.parse(localStorage.getItem("marksBackup")); } catch (e) { return null; }
+}
+function showRestore() {
+  $("restore").hidden = !backup();
+}
+function restoreMarks() {
+  const b = backup();
+  if (!b || !confirm(T("restoreAsk", Object.keys(b).length))) return;
+  change(() => (marks = b));
+  try { localStorage.removeItem("marksBackup"); } catch (e) { /* storage blocked */ }
+  showRestore();
 }
 
 function clearSteps(q) {
   const keys = Object.keys(marks).filter((k) => k.startsWith(q.id + "::"));
   if (!keys.length || !confirm(T("clearStepsAsk", keys.length))) return;
-  keys.forEach((k) => delete marks[k]);
-  saveMarks();
-  apply();
-  show(q);
+  change(() => keys.forEach((k) => delete marks[k]));
 }
 
 function resetMarks() {
   const n = Object.keys(marks).length;
   if (!n || !confirm(T("resetAsk", n))) return;
-  marks = {};
-  saveMarks();
-  fillFilters();
-  apply();
-  if (current) show(current);
+  change(() => (marks = {}));
 }
 
 function route() {
@@ -408,6 +450,9 @@ FILTERS.forEach((id) => ($(id).onchange = apply));
 $("reset").onclick = () => { $("q").value = ""; FILTERS.forEach((id) => ($(id).value = FILTER_DEFAULT[id] || "")); apply(); if (current) show(current); };
 $("export").onclick = exportMarks;
 $("export-md").onclick = exportMd;
+$("copy-md").onclick = copyMd;
+$("restore").onclick = restoreMarks;
+showRestore();
 $("reset-marks").onclick = resetMarks;
 function showHidBtn() {
   $("show-hid").classList.toggle("on", showHid);
@@ -451,17 +496,19 @@ function toggleTech() {
 }
 $("tech").onclick = toggleTech;
 addEventListener("keydown", (e) => {
+  const typing = e.target instanceof Element && e.target.closest("input, select, textarea");
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === "KeyZ" && !typing && data) { e.preventDefault(); undoLast(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey || (e.target instanceof Element && e.target.closest("input, select, textarea"))) return;
-  // physical keys, so Korean input mode works too (t/ㅅ, c/ㅊ, h/ㅗ)
+  // physical keys, so Korean input mode works too (t/ㅅ, c/ㅊ, h/ㅗ, j/ㅓ, k/ㅏ)
   if (e.code === "KeyT") { e.preventDefault(); toggleTech(); }
   else if ((e.code === "KeyC" || e.code === "KeyH") && current) { e.preventDefault(); setQuestMark(current, e.code === "KeyC" ? "done" : "hide"); }
-  else if (e.code === "ArrowDown" || e.code === "ArrowUp") {
-    // move through the quests shown in the list
+  else if (e.code === "KeyJ" || e.code === "KeyK") {
+    // move through the quests shown in the list; arrow keys stay with page scrolling
     const ids = [...document.querySelectorAll("#list li[data-id]")].map((li) => li.dataset.id);
     if (!ids.length) return;
     e.preventDefault();
     const i = current ? ids.indexOf(current.id) : -1;
-    const next = e.code === "ArrowDown" ? ids[Math.min(i + 1, ids.length - 1)] : ids[Math.max(i - 1, 0)];
+    const next = e.code === "KeyJ" ? ids[Math.min(i + 1, ids.length - 1)] : ids[Math.max(i - 1, 0)];
     location.hash = encodeURIComponent(next);
   }
 });
