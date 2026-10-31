@@ -16,6 +16,7 @@ const I18N = {
     priority: "우선순위", techShow: "기술 정보 표시", techHide: "기술 정보 숨기기", help: "도움말", markers: "마커", noMarker: "마커 정보 없음", target: "대상", radius: "반경",
     "f-st": "진행", done: "완료", unmarked: "표시 안 함", markDone: "퀘스트 완료", stepDone: "단계 완료", stepHide: "단계 숨기기",
     doneOnly: "완료 단계만 보기", allSteps: "모든 단계 보기", showHidSteps: "숨긴 단계 보기", hideHidSteps: "숨긴 단계 숨기기",
+    stepProg: (d, n) => `${d}/${n} 단계`, catProg: (d, n) => `${d}/${n} 퀘스트`, stepSum: (d, n, h) => `완료 ${d}/${n}` + (h ? ` · 숨김 ${h}` : ""),
     clearSteps: "단계 완료·숨기기 초기화", clearStepsAsk: (n) => `이 퀘스트의 단계 표시 ${n}개를 지울까요?`, export: "진행 내보내기", exportMd: "마크다운 내보내기", mdTitle: "BG3 퀘스트 진행", mdHidden: "숨김", resetMarks: "진행 초기화", import: "진행 불러오기", importBad: "진행 파일을 읽을 수 없습니다.",
     importAsk: (n) => `${n}개 표시를 불러옵니다. 지금 표시는 모두 바뀝니다. 계속할까요?`, resetAsk: (n) => `완료·숨김 표시 ${n}개를 모두 지울까요?`,
     footer: "데이터: 바닐라 게임 파일(Story/Journal의 quest·objective·questcategory 프로토타입과 Markers, Levelmaps의 경험치·골드 표)에서 추출. 막은 목표 마커의 레벨로 분류했습니다.",
@@ -36,6 +37,7 @@ const I18N = {
     priority: "Priority", techShow: "Show technical info", techHide: "Hide technical info", help: "Help", markers: "Markers", noMarker: "No marker data", target: "Target", radius: "Radius",
     "f-st": "Progress", done: "Completed", unmarked: "Unmarked", markDone: "Complete quest", stepDone: "Complete step", stepHide: "Hide step",
     doneOnly: "Show completed steps only", allSteps: "Show all steps", showHidSteps: "Show hidden steps", hideHidSteps: "Hide hidden steps",
+    stepProg: (d, n) => `${d}/${n} steps`, catProg: (d, n) => `${d}/${n} quests`, stepSum: (d, n, h) => `completed ${d}/${n}` + (h ? ` · hidden ${h}` : ""),
     clearSteps: "Clear step marks", clearStepsAsk: (n) => `Clear ${n} step marks in this quest?`, export: "Export progress", exportMd: "Export Markdown", mdTitle: "BG3 quest progress", mdHidden: "hidden", resetMarks: "Reset progress", import: "Import progress", importBad: "Could not read the progress file.",
     importAsk: (n) => `Import ${n} marks? This replaces all current marks.`, resetAsk: (n) => `Clear all ${n} completed/hidden marks?`,
     footer: "Data extracted from the vanilla game files (Story/Journal quest, objective and category prototypes and Markers; Levelmaps XP and gold tables). Acts come from the levels of objective markers.",
@@ -58,6 +60,15 @@ try { hidSteps = localStorage.getItem("hidSteps") === "1"; doneOnly = localStora
 // category groups start collapsed; the ones opened are saved in this browser
 let opened = new Set();
 try { opened = new Set(JSON.parse(localStorage.getItem("opened")) || []); } catch (e) { /* storage blocked or bad JSON */ }
+function saveOpened() {
+  try { localStorage.setItem("opened", JSON.stringify([...opened])); } catch (e) { /* storage blocked */ }
+}
+// step progress of a quest; hidden steps count toward neither side
+function stepCount(q) {
+  let done = 0, hid = 0;
+  q.steps.forEach((s) => { const m = marks[q.id + "::" + s.id]; if (m === "done") done++; else if (m === "hide") hid++; });
+  return { done, hid, total: q.steps.length - hid };
+}
 function saveMarks() {
   try { localStorage.setItem("marks", JSON.stringify(marks)); } catch (e) { /* storage blocked */ }
 }
@@ -129,17 +140,18 @@ function apply() {
     (!f["f-rw"] || REWARD[f["f-rw"]](x)) && (!f["f-st"] || (marks[x.id] || "none") === f["f-st"]));
   $("count").textContent = T("shown", shown.length);
   shown.sort((a, b) => catOrder(a.c, b.c) || qTitle(a).localeCompare(qTitle(b), ui));
-  const per = {};
-  shown.forEach((x) => (per[x.c] = (per[x.c] || 0) + 1));
+  const per = {}, perDone = {};
+  shown.forEach((x) => { per[x.c] = (per[x.c] || 0) + 1; if (marks[x.id] === "done") perDone[x.c] = (perDone[x.c] || 0) + 1; });
   let html = "", last = null;
   shown.forEach((x) => {
-    const shut = !opened.has(x.c);
+    // a search opens every group that has a hit, without changing the saved state
+    const shut = !raw && !opened.has(x.c);
     if (x.c !== last) {
-      html += `<li class="grp${shut ? " shut" : ""}" data-grp="${esc(x.c)}">${esc(catName(x.c))} <span>(${per[x.c]})</span></li>`;
+      html += `<li class="grp${shut ? " shut" : ""}" data-grp="${esc(x.c)}">${esc(catName(x.c))} <span>(${esc(T("catProg", perDone[x.c] || 0, per[x.c]))})</span></li>`;
       last = x.c;
     }
     if (shut) return;
-    const meta = [...(tech ? [x.id] : []), x.steps.length + " " + T("steps")].concat(x.vis ? [] : [T("hiddenQ")]).join(" · ");
+    const meta = [...(tech ? [x.id] : []), (({ done, total }) => T("stepProg", done, total))(stepCount(x))].concat(x.vis ? [] : [T("hiddenQ")]).join(" · ");
     const cls = [current && current.id === x.id ? "on" : "", marks[x.id] || ""].join(" ").trim();
     html += `<li data-id="${esc(x.id)}" class="${cls}">` +
       `<span class="t">${mark(qTitle(x))}</span><span class="m">${esc(meta)}</span></li>`;
@@ -219,9 +231,9 @@ function show(q) {
     dl(rel) +
     (ui === "ko" ? `<div class="toggle"><button type="button" id="en-toggle" class="${withEn ? "on" : ""}">${T("showEn")}</button></div>` : "") +
     (rewards.length ? `<section><h3>${T("rewards")}</h3>${dl(rewards)}</section>` : "") +
-    `<section><h3>${T("steps")} (${q.steps.length})</h3>` +
+    `<section><h3>${T("steps")} (${q.steps.length}) <span class="prog">${esc((({ done, total, hid }) => T("stepSum", done, total, hid))(stepCount(q)))}</span></h3>` +
     `<div class="toggle"><button type="button" data-sv="doneOnly" class="${doneOnly ? "on" : ""}">${T(doneOnly ? "allSteps" : "doneOnly")}</button>` +
-    `<button type="button" data-sv="hidSteps" class="${hidSteps ? "on" : ""}">${T(hidSteps ? "hideHidSteps" : "showHidSteps")}</button>` +
+    `<button type="button" data-sv="hidSteps" class="${hidSteps ? "on" : ""}"${doneOnly ? " disabled" : ""}>${T(hidSteps ? "hideHidSteps" : "showHidSteps")}</button>` +
     `<button type="button" id="clear-steps">${T("clearSteps")}</button></div>` +
     `${q.steps.map(stepHtml).join("")}</section>` +
     `<section><h3>${T("objectives")} (${q.obs.length})</h3>${q.obs.map(objHtml).join("")}</section>` +
@@ -234,6 +246,7 @@ function show(q) {
     if (marks[key] === b.dataset.k) delete marks[key];
     else marks[key] = b.dataset.k;
     saveMarks();
+    apply();
     show(q);
   }));
   $("detail").querySelectorAll("[data-sv]").forEach((b) => (b.onclick = () => {
@@ -312,6 +325,7 @@ function clearSteps(q) {
   if (!keys.length || !confirm(T("clearStepsAsk", keys.length))) return;
   keys.forEach((k) => delete marks[k]);
   saveMarks();
+  apply();
   show(q);
 }
 
@@ -327,7 +341,13 @@ function resetMarks() {
 
 function route() {
   const id = decodeURIComponent(location.hash.slice(1));
-  if (byId[id]) { show(byId[id]); window.scrollTo(0, 0); }
+  if (byId[id]) {
+    // open the quest's group so the list shows the quest being read
+    if (!opened.has(byId[id].c)) { opened.add(byId[id].c); saveOpened(); }
+    show(byId[id]);
+    apply();
+    window.scrollTo(0, 0);
+  }
   else if (!current) $("detail").innerHTML = `<p class="empty">${T("pick")}</p>`;
 }
 
@@ -363,7 +383,7 @@ $("list").onclick = (e) => {
   const g = e.target.closest("li[data-grp]");
   if (g) {
     opened.has(g.dataset.grp) ? opened.delete(g.dataset.grp) : opened.add(g.dataset.grp);
-    try { localStorage.setItem("opened", JSON.stringify([...opened])); } catch (e2) { /* storage blocked */ }
+    saveOpened();
     apply();
     return;
   }
