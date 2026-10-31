@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BG3 퀘스트 일지 · BG3 Quest Journal</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='2' y='1' width='12' height='14' rx='2' fill='%23d4a24c'/><path d='M5 5h6M5 8h6M5 11h4' stroke='%2315110d' stroke-width='1.4'/></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="head-row">
+    <h1 data-i18n="title">BG3 퀘스트 일지</h1>
+    <div class="ui-lang" role="group" aria-label="Language">
+      <button type="button" data-ui="ko">한국어</button><button type="button" data-ui="en">English</button>
+    </div>
+  </div>
+  <p class="sub"><span data-i18n="sub"></span> <span id="total"></span></p>
+</header>
+<div class="layout">
+  <aside class="filters">
+    <input id="q" type="search" autocomplete="off">
+    <label><span data-i18n="f-c"></span> <select id="f-c"></select></label>
+    <label><span data-i18n="f-ac"></span> <select id="f-ac"></select></label>
+    <label><span data-i18n="f-v"></span> <select id="f-v"></select></label>
+    <label><span data-i18n="f-rw"></span> <select id="f-rw"></select></label>
+    <button id="reset" type="button" data-i18n="reset"></button>
+    <p class="count" id="count"></p>
+    <ul id="list"></ul>
+  </aside>
+  <main id="detail"></main>
+</div>
+<footer data-i18n="footer"></footer>
+<script src="app.js"></script>
+</body>
+</html>
